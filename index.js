@@ -8,9 +8,9 @@ const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 
 const PORT = process.env.PORT || 7000;
-// For production: set BASE_URL env variable
-// For Beamup/Railway/Render it auto-detects from request
-let BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+// For production: Render sets RENDER_EXTERNAL_URL automatically
+// For other hosts: set BASE_URL env variable
+let BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || `http://localhost:${PORT}`;
 
 // Function to get the actual base URL (may be updated by middleware)
 function getProxyBaseUrl() {
