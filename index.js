@@ -1,0 +1,344 @@
+const { addonBuilder, getRouter } = require('stremio-addon-sdk');
+const express = require('express');
+const axios = require('axios');
+const unzipper = require('unzipper');
+const { createExtractorFromData } = require('node-unrar-js');
+const iconv = require('iconv-lite');
+const subsunacs = require('./providers/subsunacs');
+const subsSab = require('./providers/subssab');
+
+const PORT = process.env.PORT || 7000;
+// For production: set BASE_URL env variable
+// For Beamup/Railway/Render it auto-detects from request
+let BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+
+// Function to get the actual base URL (may be updated by middleware)
+function getProxyBaseUrl() {
+    return BASE_URL;
+}
+
+const manifest = {
+    id: 'com.stremio.bulgarian.subs',
+    version: '1.0.0',
+    name: 'Subsunacs & Subs.sab.bz',
+    description: 'Търси български субтитри от Subsunacs.net и Subs.sab.bz',
+    logo: 'https://i.imgur.com/QCmL3wM.png',
+    resources: ['subtitles'],
+    types: ['movie', 'series'],
+    catalogs: [],
+    idPrefixes: ['tt'],
+    behaviorHints: {
+        configurable: false,
+        configurationRequired: false
+    }
+};
+
+const builder = new addonBuilder(manifest);
+
+builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
+    console.log(`[Request] Type: ${type}, ID: ${id}`);
+    
+    // Parse the ID - format is tt1234567 or tt1234567:1:2 (for series with season:episode)
+    const [imdbId, season, episode] = id.split(':');
+    
+    if (!imdbId || !imdbId.startsWith('tt')) {
+        return { subtitles: [] };
+    }
+
+    try {
+        // Search both providers in parallel
+        const [subsunacsSubs, subsSabSubs] = await Promise.all([
+            subsunacs.search(imdbId, type, season, episode).catch(err => {
+                console.error('[Subsunacs Error]', err.message);
+                return [];
+            }),
+            subsSab.search(imdbId, type, season, episode).catch(err => {
+                console.error('[Subs.sab.bz Error]', err.message);
+                return [];
+            })
+        ]);
+
+        // Convert URLs to use our proxy (include episode for season packs)
+        const allSubtitles = [...subsunacsSubs, ...subsSabSubs].map(sub => {
+            let proxyUrl = `${getProxyBaseUrl()}/proxy?url=${encodeURIComponent(sub.url)}&source=${sub.id.split('_')[0]}`;
+            // Add season/episode for season pack extraction
+            if (type === 'series' && season && episode) {
+                proxyUrl += `&season=${season}&episode=${episode}`;
+            }
+            return { ...sub, url: proxyUrl };
+        });
+        
+        console.log(`[Result] Found ${allSubtitles.length} subtitles`);
+        
+        return { subtitles: allSubtitles };
+    } catch (error) {
+        console.error('[Handler Error]', error);
+        return { subtitles: [] };
+    }
+});
+
+// Create Express app
+const app = express();
+
+// Add CORS headers and detect BASE_URL
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    
+    // Auto-detect BASE_URL from first request if not set
+    if (!BASE_URL && req.headers.host) {
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+        const host = req.headers['x-forwarded-host'] || req.headers.host;
+        BASE_URL = `${protocol}://${host}`;
+        console.log(`[Config] Auto-detected BASE_URL: ${BASE_URL}`);
+    }
+    
+    next();
+});
+
+// Proxy endpoint to download and extract subtitles
+app.get('/proxy', async (req, res) => {
+    const { url, source, season, episode } = req.query;
+    
+    if (!url) {
+        return res.status(400).send('Missing URL parameter');
+    }
+
+    console.log(`[Proxy] Source: ${source}, URL: ${url}${season ? `, S${season}E${episode}` : ''}`);
+
+    try {
+        let buffer;
+        
+        // Use provider's download function
+        if (source === 'subsunacs') {
+            buffer = await subsunacs.download(url);
+        } else if (source === 'subssab') {
+            buffer = await subsSab.download(url);
+        } else {
+            // Fallback to direct download
+            const response = await axios.get(url, {
+                responseType: 'arraybuffer',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6',
+                    'Referer': url
+                },
+                timeout: 30000
+            });
+            buffer = Buffer.from(response.data);
+        }
+        
+        if (!buffer || buffer.length === 0) {
+            console.log('[Proxy] Empty response');
+            return res.status(404).send('Could not download subtitle');
+        }
+        
+        console.log(`[Proxy] Downloaded ${buffer.length} bytes`);
+        
+        // Log first bytes for debugging
+        const firstBytes = buffer.slice(0, 20).toString('hex');
+        console.log(`[Proxy] File signature: ${firstBytes}`);
+        
+        // Check file type by magic bytes
+        const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B; // PK
+        const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72; // Rar
+        const is7z = buffer[0] === 0x37 && buffer[1] === 0x7A && buffer[2] === 0xBC; // 7z
+        
+        // Check if it's HTML error page
+        const textStart = buffer.toString('utf8', 0, 100).toLowerCase();
+        if (textStart.includes('<!doctype') || textStart.includes('<html') || textStart.includes('error')) {
+            console.log('[Proxy] Received HTML error page instead of archive');
+            console.log('[Proxy] Content:', buffer.toString('utf8', 0, 300));
+            return res.status(404).send('Download link returned error page');
+        }
+        
+        if (is7z) {
+            console.log('[Proxy] Detected 7z file - not supported');
+            return res.status(415).send('7z archives are not supported');
+        }
+        
+        if (isZip) {
+            console.log('[Proxy] Detected ZIP file, extracting...');
+            try {
+                return await extractFromZip(buffer, res, season, episode);
+            } catch (zipError) {
+                console.log('[Proxy] ZIP failed, trying RAR...');
+                try {
+                    return await extractFromRar(buffer, res, season, episode);
+                } catch (rarError) {
+                    console.log('[Proxy] Both ZIP and RAR failed');
+                    return res.status(500).send('Failed to extract archive');
+                }
+            }
+        } else if (isRar) {
+            console.log('[Proxy] Detected RAR file, extracting...');
+            try {
+                return await extractFromRar(buffer, res, season, episode);
+            } catch (rarError) {
+                console.log('[Proxy] RAR failed, trying ZIP...');
+                try {
+                    return await extractFromZip(buffer, res, season, episode);
+                } catch (zipError) {
+                    console.log('[Proxy] Both RAR and ZIP failed');
+                    return res.status(500).send('Failed to extract archive');
+                }
+            }
+        } else {
+            // Check if it's already an SRT file (text content)
+            const text = buffer.toString('utf8').substring(0, 200);
+            if (text.includes('-->') || /^\d+\s*\n\d{2}:\d{2}/.test(text)) {
+                console.log('[Proxy] Detected SRT file directly');
+                let content = buffer.toString('utf8');
+                if (content.includes('�') || /[\x80-\x9F]/.test(content)) {
+                    content = iconv.decode(buffer, 'win1251');
+                }
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                return res.send(content);
+            }
+            
+            // Unknown format or HTML error page
+            console.log('[Proxy] Unknown format, first 100 chars:', text.substring(0, 100));
+            return res.status(415).send('Unknown subtitle format');
+        }
+        
+    } catch (error) {
+        console.error('[Proxy] Error:', error.message);
+        res.status(500).send(`Error downloading subtitle: ${error.message}`);
+    }
+});
+
+// Helper function to find the best subtitle file for an episode
+function findSubtitleForEpisode(files, season, episode) {
+    const subtitleExtensions = ['.srt', '.sub', '.ssa', '.ass'];
+    
+    // Filter only subtitle files
+    const subFiles = files.filter(f => {
+        const name = (f.path || f.name || '').toLowerCase();
+        return subtitleExtensions.some(ext => name.endsWith(ext));
+    });
+    
+    if (subFiles.length === 0) return null;
+    if (subFiles.length === 1) return subFiles[0]; // Only one file, use it
+    
+    // If we have season/episode, find the matching file
+    if (season && episode) {
+        const s = String(season).padStart(2, '0');
+        const e = String(episode).padStart(2, '0');
+        const sNum = parseInt(season);
+        const eNum = parseInt(episode);
+        
+        // Patterns to match specific episode
+        const patterns = [
+            new RegExp(`s0*${sNum}e0*${eNum}`, 'i'),
+            new RegExp(`\\b0*${sNum}x0*${eNum}\\b`, 'i'),
+            new RegExp(`[\\.\_\\-\\s]0*${eNum}[\\.\_\\-\\s]`, 'i'), // Just episode number
+            new RegExp(`e0*${eNum}[^0-9]`, 'i'),
+        ];
+        
+        for (const pattern of patterns) {
+            const match = subFiles.find(f => {
+                const name = (f.path || f.name || '');
+                return pattern.test(name);
+            });
+            if (match) {
+                console.log(`[Proxy] Found episode match: ${match.path || match.name}`);
+                return match;
+            }
+        }
+        
+        console.log(`[Proxy] No specific episode file found for S${s}E${e}, files:`, subFiles.map(f => f.path || f.name));
+    }
+    
+    // Fallback: return first subtitle file
+    return subFiles[0];
+}
+
+// Helper function to extract subtitle from ZIP archive
+async function extractFromZip(buffer, res, season = null, episode = null) {
+    try {
+        const directory = await unzipper.Open.buffer(buffer);
+        
+        // Find the best subtitle file (for episode or first available)
+        const subFile = findSubtitleForEpisode(directory.files, season, episode);
+        
+        if (!subFile) {
+            console.log('[Proxy] No subtitle file found in ZIP');
+            return res.status(404).send('No subtitle file found in archive');
+        }
+
+        console.log(`[Proxy] Extracting from ZIP: ${subFile.path}`);
+        
+        const subBuffer = await subFile.buffer();
+        return sendSubtitleContent(subBuffer, res);
+        
+    } catch (error) {
+        console.error('[Proxy] ZIP extract error:', error.message);
+        throw error;
+    }
+}
+
+// Helper function to extract subtitle from RAR archive
+async function extractFromRar(buffer, res, season = null, episode = null) {
+    try {
+        const extractor = await createExtractorFromData({ data: buffer });
+        const list = extractor.getFileList();
+        const fileHeaders = [...list.fileHeaders];
+        
+        // Find the best subtitle file (for episode or first available)
+        // Convert to format compatible with findSubtitleForEpisode
+        const filesWithPath = fileHeaders.map(f => ({ ...f, path: f.name }));
+        const subFileHeader = findSubtitleForEpisode(filesWithPath, season, episode);
+        
+        if (!subFileHeader) {
+            console.log('[Proxy] No subtitle file found in RAR');
+            return res.status(404).send('No subtitle file found in archive');
+        }
+
+        console.log(`[Proxy] Extracting from RAR: ${subFileHeader.name}`);
+        
+        // Extract the file
+        const extracted = extractor.extract({ files: [subFileHeader.name] });
+        const files = [...extracted.files];
+        
+        if (files.length === 0 || !files[0].extraction) {
+            console.log('[Proxy] Failed to extract file from RAR');
+            return res.status(500).send('Failed to extract subtitle');
+        }
+        
+        const subBuffer = Buffer.from(files[0].extraction);
+        return sendSubtitleContent(subBuffer, res);
+        
+    } catch (error) {
+        console.error('[Proxy] RAR extract error:', error.message);
+        throw error;
+    }
+}
+
+// Helper function to send subtitle content with proper encoding
+function sendSubtitleContent(subBuffer, res) {
+    let content;
+    try {
+        content = subBuffer.toString('utf8');
+        // Check for encoding issues (Bulgarian in wrong encoding)
+        if (content.includes('�') || /[\x80-\x9F]/.test(content)) {
+            content = iconv.decode(subBuffer, 'win1251');
+        }
+    } catch (e) {
+        content = iconv.decode(subBuffer, 'win1251');
+    }
+    
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
+    return res.send(content);
+}
+
+// Mount the addon
+app.use(getRouter(builder.getInterface()));
+
+app.listen(PORT, () => {
+    console.log(`
+🎬 Bulgarian Subtitles Addon is running!
+📡 HTTP: http://localhost:${PORT}/manifest.json
+📦 Install in Stremio: http://localhost:${PORT}/manifest.json
+🔄 Proxy endpoint: http://localhost:${PORT}/proxy
+`);
+});

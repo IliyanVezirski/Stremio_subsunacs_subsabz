@@ -1,0 +1,32 @@
+{
+  "name": "stremio-bulgarian-subs",
+  "version": "1.0.0",
+  "description": "Stremio addon for Bulgarian subtitles from Subsunacs.net and Subs.sab.bz",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "stremio",
+    "addon",
+    "subtitles",
+    "bulgarian",
+    "subsunacs",
+    "subs.sab.bz"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "express": "^5.2.1",
+    "iconv-lite": "^0.6.3",
+    "node-unrar-js": "^2.0.2",
+    "stremio-addon-sdk": "^1.6.10",
+    "unzipper": "^0.12.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
