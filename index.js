@@ -7,11 +7,10 @@ const iconv = require('iconv-lite');
 const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 
-// Beamup uses port 5000, locally we use 7000
-const PORT = process.env.PORT || 5000;
-// For production: Render sets RENDER_EXTERNAL_URL, Beamup sets APP_URL
-// For other hosts: set BASE_URL env variable
-let BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || process.env.BASE_URL || `http://localhost:${PORT}`;
+// Render.com uses PORT env variable, locally we use 7000
+const PORT = process.env.PORT || 7000;
+// For production: Render sets RENDER_EXTERNAL_URL
+let BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || `http://localhost:${PORT}`;
 
 // Ensure https for production
 if (BASE_URL && !BASE_URL.startsWith('http://localhost') && BASE_URL.startsWith('http://')) {
@@ -86,23 +85,18 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
 // Create Express app
 const app = express();
 
-// Add CORS headers and detect BASE_URL
+// Add CORS headers
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     
-    // Auto-detect BASE_URL from request headers (for Beamup and other hosts)
-    // Priority: x-forwarded-host > host header
-    const forwardedHost = req.headers['x-forwarded-host'];
-    const host = req.headers.host;
-    
-    if (forwardedHost && forwardedHost.includes('beamup')) {
-        BASE_URL = `https://${forwardedHost}`;
-    } else if (host && host.includes('beamup')) {
-        BASE_URL = `https://${host}`;
-    } else if (host && !host.startsWith('localhost') && !host.startsWith('127.')) {
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        BASE_URL = `${protocol}://${host}`;
+    // Auto-detect BASE_URL from request headers if not set
+    if (!process.env.RENDER_EXTERNAL_URL && !process.env.BASE_URL) {
+        const host = req.headers['x-forwarded-host'] || req.headers.host;
+        if (host && !host.startsWith('localhost') && !host.startsWith('127.')) {
+            const protocol = req.headers['x-forwarded-proto'] || 'https';
+            BASE_URL = `${protocol}://${host}`;
+        }
     }
     
     next();
@@ -350,7 +344,7 @@ app.get('/debug', async (req, res) => {
         baseUrl: BASE_URL,
         env: {
             PORT: process.env.PORT,
-            APP_URL: process.env.APP_URL
+            RENDER_EXTERNAL_URL: process.env.RENDER_EXTERNAL_URL
         },
         tests: {}
     };
