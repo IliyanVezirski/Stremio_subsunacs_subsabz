@@ -7,7 +7,8 @@ const iconv = require('iconv-lite');
 const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 
-const PORT = process.env.PORT || 7000;
+// Beamup uses port 5000, locally we use 7000
+const PORT = process.env.PORT || 5000;
 // For production: Render sets RENDER_EXTERNAL_URL, Beamup sets APP_URL
 // For other hosts: set BASE_URL env variable
 let BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || process.env.BASE_URL || `http://localhost:${PORT}`;
@@ -335,6 +336,45 @@ function sendSubtitleContent(subBuffer, res) {
     res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
     return res.send(content);
 }
+
+// Debug endpoint to test external connectivity
+app.get('/debug', async (req, res) => {
+    const results = {
+        port: PORT,
+        baseUrl: BASE_URL,
+        env: {
+            PORT: process.env.PORT,
+            APP_URL: process.env.APP_URL
+        },
+        tests: {}
+    };
+    
+    // Test Cinemeta
+    try {
+        const response = await axios.get('https://v3-cinemeta.strem.io/meta/movie/tt1375666.json', { timeout: 10000 });
+        results.tests.cinemeta = { ok: true, title: response.data?.meta?.name };
+    } catch (e) {
+        results.tests.cinemeta = { ok: false, error: e.message };
+    }
+    
+    // Test Subsunacs
+    try {
+        const response = await axios.get('https://subsunacs.net/', { timeout: 10000 });
+        results.tests.subsunacs = { ok: true, status: response.status };
+    } catch (e) {
+        results.tests.subsunacs = { ok: false, error: e.message };
+    }
+    
+    // Test Subs.sab.bz
+    try {
+        const response = await axios.get('https://subs.sab.bz/', { timeout: 10000 });
+        results.tests.subssab = { ok: true, status: response.status };
+    } catch (e) {
+        results.tests.subssab = { ok: false, error: e.message };
+    }
+    
+    res.json(results);
+});
 
 // Mount the addon
 app.use(getRouter(builder.getInterface()));
