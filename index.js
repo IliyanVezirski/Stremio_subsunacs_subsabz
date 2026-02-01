@@ -86,6 +86,15 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
 // Create Express app
 const app = express();
 
+// Health check endpoint for Koyeb/other hosts
+app.get('/', (req, res) => {
+    res.redirect('/manifest.json');
+});
+
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
+
 // Add CORS headers and detect BASE_URL
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
