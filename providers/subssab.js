@@ -4,6 +4,8 @@ const iconv = require('iconv-lite');
 
 const BASE_URL = 'http://subs.sab.bz';
 const CINEMETA_URL = 'https://v3-cinemeta.strem.io/meta';
+const TMDB_API_KEY = 'b019b78bbd3a80f0f3112369c3b8c243';
+const TMDB_URL = 'https://api.themoviedb.org/3';
 
 /**
  * Normalize title for comparison - remove special chars, lowercase
@@ -247,6 +249,7 @@ async function download(downloadUrl) {
 }
 
 async function getMetadata(imdbId, type) {
+    // Try Cinemeta first
     try {
         const metaType = type === 'series' ? 'series' : 'movie';
         const url = `${CINEMETA_URL}/${metaType}/${imdbId}.json`;
@@ -256,17 +259,40 @@ async function getMetadata(imdbId, type) {
             timeout: 10000
         });
 
-        if (response.data && response.data.meta) {
+        if (response.data && response.data.meta && response.data.meta.name) {
             return {
                 name: response.data.meta.name,
                 year: response.data.meta.year || response.data.meta.releaseInfo
             };
         }
-        return null;
     } catch (error) {
         console.error('[Cinemeta] Error:', error.message);
-        return null;
     }
+    
+    // Fallback to TMDB
+    console.log('[Subs.sab.bz] Cinemeta failed, trying TMDB...');
+    try {
+        const tmdbType = type === 'series' ? 'tv' : 'movie';
+        const url = `${TMDB_URL}/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`;
+        
+        const response = await axios.get(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            timeout: 10000
+        });
+
+        const results = type === 'series' ? response.data.tv_results : response.data.movie_results;
+        
+        if (results && results.length > 0) {
+            const item = results[0];
+            const name = item.title || item.name;
+            const year = (item.release_date || item.first_air_date || '').substring(0, 4);
+            return { name, year };
+        }
+    } catch (error) {
+        console.error('[TMDB] Error:', error.message);
+    }
+    
+    return null;
 }
 
 module.exports = { search, download };
