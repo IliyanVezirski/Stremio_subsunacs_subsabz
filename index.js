@@ -24,7 +24,7 @@ function getProxyBaseUrl() {
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.0.0',
+    version: '1.0.1',
     name: 'Subsunacs & Subs.sab.bz',
     description: 'Търси български субтитри от Subsunacs.net и Subs.sab.bz',
     logo: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
