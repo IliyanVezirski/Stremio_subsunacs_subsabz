@@ -91,7 +91,8 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     
     // Auto-detect BASE_URL from request headers (for Beamup and other hosts)
-    if (req.headers.host && req.headers.host !== `localhost:${PORT}`) {
+    // Always update if host contains 'beamup' or is not localhost
+    if (req.headers.host && !req.headers.host.startsWith('localhost')) {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers['x-forwarded-host'] || req.headers.host;
         BASE_URL = `${protocol}://${host}`;
