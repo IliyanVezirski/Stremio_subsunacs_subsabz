@@ -86,7 +86,7 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
         }
     }
     
-    // For short titles (1-2 words), be VERY strict
+    // For short titles (1-2 words), be VERY strict but handle numbered sequels
     if (titleWords.length <= 2) {
         // Title must be at the beginning
         const startsWithTitle = titleWords.every((word, i) => subWords[i] === word);
@@ -98,12 +98,13 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
         const nextWordIndex = titleWords.length;
         if (subWords[nextWordIndex]) {
             const nextWord = subWords[nextWordIndex];
-            // Next word should be: year, or release term (720p, bluray, etc), or "aka"
+            // Next word should be: year, release term, "aka", or number (for sequels like "Zootopia 2")
             const isYear = /^(19|20)\d{2}$/.test(nextWord);
             const isReleaseTerm = /^(720p|1080p|2160p|4k|bluray|bdrip|brrip|hdrip|webrip|web|dvdrip|hdtv|proper|repack|extended|unrated|directors|x264|x265|h264|h265|aac|dts|ac3|remux|uhd)$/i.test(nextWord);
             const isAka = nextWord === 'aka' || nextWord === 'a';
+            const isNumber = /^\d+$/.test(nextWord); // Allow numbers (sequel numbers, part numbers)
             
-            if (!isYear && !isReleaseTerm && !isAka) {
+            if (!isYear && !isReleaseTerm && !isAka && !isNumber) {
                 // Next word is probably part of a different movie title
                 console.log(`[Filter] "${nextWord}" after "${normalizedTitle}" looks like different movie`);
                 return { match: false, score: 0 };
