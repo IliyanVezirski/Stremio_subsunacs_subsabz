@@ -27,7 +27,7 @@ const manifest = {
     version: '1.0.0',
     name: 'Subsunacs & Subs.sab.bz',
     description: 'Търси български субтитри от Subsunacs.net и Subs.sab.bz',
-    logo: 'https://i.imgur.com/QCmL3wM.png',
+    logo: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
     resources: ['subtitles'],
     types: ['movie', 'series'],
     catalogs: [],
