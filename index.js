@@ -8,9 +8,14 @@ const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 
 const PORT = process.env.PORT || 7000;
-// For production: Render sets RENDER_EXTERNAL_URL automatically
+// For production: Render sets RENDER_EXTERNAL_URL, Beamup sets APP_URL
 // For other hosts: set BASE_URL env variable
-let BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || `http://localhost:${PORT}`;
+let BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || process.env.BASE_URL || `http://localhost:${PORT}`;
+
+// Ensure https for production
+if (BASE_URL && !BASE_URL.startsWith('http://localhost') && BASE_URL.startsWith('http://')) {
+    BASE_URL = BASE_URL.replace('http://', 'https://');
+}
 
 // Function to get the actual base URL (may be updated by middleware)
 function getProxyBaseUrl() {
@@ -85,12 +90,11 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     
-    // Auto-detect BASE_URL from first request if not set
-    if (!BASE_URL && req.headers.host) {
-        const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    // Auto-detect BASE_URL from request headers (for Beamup and other hosts)
+    if (req.headers.host && req.headers.host !== `localhost:${PORT}`) {
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers['x-forwarded-host'] || req.headers.host;
         BASE_URL = `${protocol}://${host}`;
-        console.log(`[Config] Auto-detected BASE_URL: ${BASE_URL}`);
     }
     
     next();
