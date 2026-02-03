@@ -25,7 +25,7 @@ function normalizeTitle(title) {
 function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = null) {
     const normalizedSub = normalizeTitle(subName);
     const normalizedTitle = normalizeTitle(movieTitle);
-    const titleWords = normalizedTitle.split(/\s+/).filter(w => w.length > 2);
+    const titleWords = normalizedTitle.split(/\s+/);
     const subWords = normalizedSub.split(/\s+/);
     
     // For TV series - check season/episode match
