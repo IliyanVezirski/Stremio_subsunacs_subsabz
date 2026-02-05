@@ -1,6 +1,8 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const iconv = require('iconv-lite');
+const { fuzzyMatch } = require('./fuzzy');
+const { getImdbMetadata } = require('./subsunacs');
 
 const BASE_URL = 'http://subs.sab.bz';
 const CINEMETA_URL = 'https://v3-cinemeta.strem.io/meta';
@@ -14,6 +16,15 @@ function normalizeTitle(title) {
     return title
         .toLowerCase()
         .replace(/[^a-z0-9\u0400-\u04FF\s]/gi, ' ') // Keep letters, numbers, cyrillic
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// Sanitize a string for search queries: remove punctuation like :,-. and collapse spaces
+function sanitizeSearchString(s) {
+    if (!s) return s;
+    return String(s)
+        .replace(/[\:\-–—,\.\/\\\(\)\[\]"'`]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -92,17 +103,20 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
         if (!startsWithTitle) {
             return { match: false, score: 0 };
         }
-        
+
         // Check what comes AFTER the title
         const nextWordIndex = titleWords.length;
         if (subWords[nextWordIndex]) {
             const nextWord = subWords[nextWordIndex];
-            // Next word should be: year, or release term (720p, bluray, etc), or "aka"
+            // Next word should be: year, or release term (720p, bluray, etc), or "aka", or episode/season marker
             const isYear = /^(19|20)\d{2}$/.test(nextWord);
             const isReleaseTerm = /^(720p|1080p|2160p|4k|bluray|bdrip|brrip|hdrip|webrip|web|dvdrip|hdtv|proper|repack|extended|unrated|directors|x264|x265|h264|h265|aac|dts|ac3|remux|uhd)$/i.test(nextWord);
             const isAka = nextWord === 'aka' || nextWord === 'a';
-            
-            if (!isYear && !isReleaseTerm && !isAka) {
+            const isNumber = /^\d+$/.test(nextWord);
+            const isEpisodePattern = /^\d{1,2}x\d{1,2}$/i.test(nextWord) || /^s\d{1,2}e\d{1,2}$/i.test(nextWord);
+            const isSeasonToken = /^season$/i.test(nextWord) || /^s\d{1,2}$/i.test(nextWord);
+
+            if (!isYear && !isReleaseTerm && !isAka && !isNumber && !isEpisodePattern && !isSeasonToken) {
                 // Next word is probably part of a different movie title
                 return { match: false, score: 0 };
             }
@@ -112,11 +126,23 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
     // Calculate match score
     const matchScore = titleWords.filter(word => normalizedSub.includes(word)).length;
     const minMatches = Math.max(1, Math.ceil(titleWords.length * 0.5));
-    
-    return {
-        match: matchScore >= minMatches,
-        score: matchScore
-    };
+
+    if (matchScore >= minMatches) {
+        return { match: true, score: matchScore };
+    }
+
+    // Fallback: fuzzy matching (Levenshtein + token overlap)
+    try {
+        const fm = fuzzyMatch(subName, movieTitle);
+        if (fm.match) {
+            console.log(`[Fuzzy] Accepted by fuzzy: lev=${fm.lev.toFixed(2)} overlap=${fm.overlap.toFixed(2)} score=${fm.score.toFixed(2)}`);
+            return { match: true, score: Math.round(fm.score * 10) };
+        }
+    } catch (e) {
+        console.error('[Fuzzy] Error:', e.message);
+    }
+
+    return { match: false, score: matchScore };
 }
 
 /**
@@ -134,13 +160,14 @@ async function search(imdbId, type, season, episode) {
         const year = meta.year ? String(meta.year).substring(0, 4) : '';
         const isSeries = type === 'series' && season && episode;
         
-        console.log(`[Subs.sab.bz] Searching for: ${meta.name} ${isSeries ? `S${season}E${episode}` : `(${year})`}`);
+        // Log search target (do not include year in the search string)
+        console.log(`[Subs.sab.bz] Searching for: ${meta.name}${isSeries ? ` S${season}E${episode}` : ''} (year=${year || 'unknown'})`);
         
-        let searchQuery = meta.name;
+        let searchQuery = sanitizeSearchString(meta.name);
         if (isSeries) {
             const s = String(season).padStart(2, '0');
             const e = String(episode).padStart(2, '0');
-            searchQuery = `${meta.name} ${s}x${e}`;
+            searchQuery = `${sanitizeSearchString(meta.name)} ${s}x${e}`;
         }
         
         const searchUrl = `${BASE_URL}/index.php?act=search&movie=${encodeURIComponent(searchQuery)}&select-language=2`;
@@ -158,61 +185,179 @@ async function search(imdbId, type, season, episode) {
 
         const html = iconv.decode(Buffer.from(response.data), 'win1251');
         const $ = cheerio.load(html);
-        
+
         const subtitles = [];
-        
-        // Look for subtitle links - they have onMouseover with tooltip containing movie info
-        $('a[href*="act=download"][onmouseout="hideddrivetip()"]').each((index, element) => {
-            const $link = $(element);
-            const name = $link.text().trim();
-            let href = $link.attr('href');
-            
-            if (!href || !name || name.length < 2) return;
-            
-            // Check if subtitle matches our movie/series
-            const matchResult = isSeries 
-                ? isGoodMatch(name, meta.name, null, season, episode)
-                : isGoodMatch(name, meta.name, year);
-            if (!matchResult.match) {
-                return; // Skip this subtitle
-            }
-            
-            const matchScore = matchResult.score;
-            
-            // Extract attach_id from download URL
-            const attachMatch = href.match(/attach_id=(\d+)/);
-            if (!attachMatch) return;
-            
-            const attachId = attachMatch[1];
-            
-            // Try to get uploader from row
-            let uploader = '';
-            const $row = $link.closest('tr');
-            if ($row.length) {
-                const $uploaderLink = $row.find('a[href*="showuser"]');
-                if ($uploaderLink.length) {
-                    uploader = $uploaderLink.text().trim();
+        const deferred = [];
+
+        // Helper to parse a cheerio document and collect subtitle entries
+        const parseDoc = ($doc) => {
+            $doc('a[href*="act=download"][onmouseout="hideddrivetip()"]').each((index, element) => {
+                const $link = $doc(element);
+                const name = $link.text().trim();
+                let href = $link.attr('href');
+
+                if (!href || !name || name.length < 2) return;
+
+                // Extract year/date from the row (e.g. <td>13 Mar 2015</td>)
+                let subtitleYear = null;
+                try {
+                    const $row = $link.closest('tr');
+                    if ($row.length) {
+                        $row.find('td').each((i, td) => {
+                            const txt = $doc(td).text().trim();
+                            const m = txt.match(/(19|20)\d{2}/);
+                            if (m && !subtitleYear) subtitleYear = m[0];
+                        });
+                    }
+                } catch (e) {}
+
+                // If page provides a year and it doesn't match movie year, skip this subtitle
+                if (!isSeries && subtitleYear && year && String(subtitleYear) !== String(year)) {
+                    return;
                 }
-            }
-            
-            // Make full URL
-            if (!href.startsWith('http')) {
-                href = `${BASE_URL}/${href}`;
-            }
-            
-            subtitles.push({
-                id: `subssab_${attachId}`,
-                lang: 'bul',
-                url: href,
-                score: matchScore
+
+                // Check if subtitle matches our movie/series
+                const matchResult = isSeries
+                    ? isGoodMatch(name, meta.name, null, season, episode)
+                    : isGoodMatch(name, meta.name, year);
+                if (!matchResult.match) return;
+
+                const matchScore = matchResult.score;
+
+                // Extract attach_id from download URL
+                const attachMatch = href.match(/attach_id=(\d+)/);
+                if (!attachMatch) return;
+                const attachId = attachMatch[1];
+
+                // Make full URL
+                if (!href.startsWith('http')) {
+                    href = `${BASE_URL}/${href}`;
+                }
+
+                // If this is a season pack and an episode is requested, defer inspection of detail page
+                if (isSeries && matchResult.isSeasonPack && season && episode) {
+                    deferred.push(
+                        fetchEpisodeSubsFromSabDetail(href, season, episode).then((episodeSubs) => {
+                            if (episodeSubs && episodeSubs.length) {
+                                for (const es of episodeSubs) {
+                                    subtitles.push({ id: `subssab_${es.id || attachId}`, lang: 'bul', url: es.url, score: matchScore + 5 });
+                                    console.log(`[Subs.sab.bz] Episode found inside season pack: id=${es.id || attachId} name="${es.name}" href=${es.url}`);
+                                }
+                                return true;
+                            }
+                            return false;
+                        }).catch((e) => {
+                            console.error('[Subs.sab.bz] Error fetching season pack details:', e && e.message ? e.message : e);
+                            return false;
+                        })
+                    );
+                    return;
+                }
+
+                console.log(`[Subs.sab.bz] Match found: id=${attachId} name="${name}" year=${subtitleYear || '?'} score=${matchScore} href=${href}`);
+
+                subtitles.push({
+                    id: `subssab_${attachId}`,
+                    lang: 'bul',
+                    url: href,
+                    score: matchScore
+                });
             });
+        };
+
+        // Parse first page
+        parseDoc($);
+
+        // wait for any deferred seasonal detail inspections
+        try { await Promise.all(deferred); } catch (e) {}
+
+        // Helper: fetch a Subs.sab.bz detail page and try to find episode-specific download links
+        async function fetchEpisodeSubsFromSabDetail(detailUrl, season, episode) {
+            try {
+                const r = await axios.get(detailUrl, { responseType: 'arraybuffer', headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': searchUrl }, timeout: 15000 });
+                const h = iconv.decode(Buffer.from(r.data), 'win1251');
+                const $$ = cheerio.load(h);
+                const s = String(season).padStart(2, '0');
+                const e = String(episode).padStart(2, '0');
+                const patterns = [new RegExp(`s0*${parseInt(season)}e0*${parseInt(episode)}`, 'i'), new RegExp(`${parseInt(season)}x0*${parseInt(episode)}`, 'i'), new RegExp(`\b${s}x${e}\b`, 'i')];
+                const found = [];
+                $$('a').each((i, el) => {
+                    const txt = $$(el).text().trim();
+                    let href = $$(el).attr('href');
+                    if (!href) return;
+                    if (patterns.some(p => p.test(txt) || p.test(href))) {
+                        if (!href.startsWith('http')) href = `${BASE_URL}/${href.replace(/^\//, '')}`;
+                        const idm = href.match(/attach_id=(\d+)/) || href.match(/id=(\d+)/) || href.match(/-(\d+)\/?$/);
+                        const idv = idm ? idm[1] : null;
+                        found.push({ id: idv, url: href, name: txt });
+                    }
+                });
+                return found;
+            } catch (e) {
+                return [];
+            }
+        }
+
+        // Find numeric pagination links and collect their hrefs
+        const pageHrefs = new Set();
+        // Look into common pagination containers
+        const containers = ['#pages', '.pages', '.pagination', 'center', '.pagenav'];
+        containers.forEach((sel) => {
+            try {
+                $(sel).find('a').each((i2, a) => {
+                    const txt = $(a).text().trim();
+                    let href = $(a).attr('href');
+                    if (!href) return;
+                    href = href.trim();
+                    // Ignore anchors and javascript pseudo-links
+                    if (href === '#' || href === '' || href.startsWith('#') || href.toLowerCase().startsWith('javascript')) return;
+                    if (/^\d+$/.test(txt) && href) {
+                        let full = href;
+                        if (!full.startsWith('http')) full = `${BASE_URL}/${full.replace(/^\//, '')}`;
+                        pageHrefs.add(full);
+                    }
+                });
+            } catch (e) {}
         });
 
-        // Sort by match score
-        subtitles.sort((a, b) => b.score - a.score);
+        // Fallback: scan all anchors for numeric text
+        if (pageHrefs.size === 0) {
+            $('a').each((i, a) => {
+                const txt = $(a).text().trim();
+                let href = $(a).attr('href');
+                if (!href) return;
+                href = href.trim();
+                if (href === '#' || href === '' || href.startsWith('#') || href.toLowerCase().startsWith('javascript')) return;
+                if (/^\d+$/.test(txt) && href) {
+                    let full = href;
+                    if (!full.startsWith('http')) full = `${BASE_URL}/${full.replace(/^\//, '')}`;
+                    pageHrefs.add(full);
+                }
+            });
+        }
 
-        console.log(`[Subs.sab.bz] Found ${subtitles.length} subtitles`);
-        return subtitles;
+        // Fetch and parse each page href
+        for (const href of pageHrefs) {
+            try {
+                console.log(`[Subs.sab.bz] Fetching page href: ${href}`);
+                const r = await axios.get(href, { responseType: 'arraybuffer', headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': searchUrl }, timeout: 15000 });
+                const h = iconv.decode(Buffer.from(r.data), 'win1251');
+                const $$ = cheerio.load(h);
+                parseDoc($$);
+            } catch (e) {
+                console.error('[Subs.sab.bz] Page fetch error:', e.message);
+            }
+        }
+
+        // Deduplicate and sort
+        const dedup = {};
+        for (const s of subtitles) {
+            if (!dedup[s.id] || s.score > dedup[s.id].score) dedup[s.id] = s;
+        }
+        const results = Object.values(dedup).sort((a, b) => b.score - a.score);
+
+        console.log(`[Subs.sab.bz] Found ${results.length} subtitles across pages`);
+        return results;
         
     } catch (error) {
         console.error('[Subs.sab.bz] Search error:', error.message);
@@ -249,7 +394,18 @@ async function download(downloadUrl) {
 }
 
 async function getMetadata(imdbId, type) {
-    // Try Cinemeta first
+    // Prefer IMDb scraping first
+    try {
+        const imdbMeta = await getImdbMetadata(imdbId);
+        if (imdbMeta && imdbMeta.name) {
+            console.log(`[Subs.sab.bz] IMDb metadata: ${imdbMeta.name} (${imdbMeta.year || 'unknown'})`);
+            return imdbMeta;
+        }
+    } catch (e) {
+        console.error('[Subs.sab.bz] IMDb fetch error:', e.message);
+    }
+
+    // Try Cinemeta next
     try {
         const metaType = type === 'series' ? 'series' : 'movie';
         const url = `${CINEMETA_URL}/${metaType}/${imdbId}.json`;
@@ -274,14 +430,14 @@ async function getMetadata(imdbId, type) {
     try {
         const tmdbType = type === 'series' ? 'tv' : 'movie';
         const url = `${TMDB_URL}/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`;
-        
+
         const response = await axios.get(url, {
             headers: { 'User-Agent': 'Mozilla/5.0' },
             timeout: 10000
         });
 
         const results = type === 'series' ? response.data.tv_results : response.data.movie_results;
-        
+
         if (results && results.length > 0) {
             const item = results[0];
             const name = item.title || item.name;
@@ -291,7 +447,7 @@ async function getMetadata(imdbId, type) {
     } catch (error) {
         console.error('[TMDB] Error:', error.message);
     }
-    
+
     return null;
 }
 
