@@ -45,6 +45,10 @@ const manifest = {
     behaviorHints: {
         configurable: false,
         configurationRequired: false
+    },
+    stremioAddonsConfig: {
+      "issuer": "https://stremio-addons.net",
+      "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..i0matrKUZQpKi4hcK1BrXg.XTGwBN_5sUYxMwM-F6NMDbMMILdL_7-1eyYbH-YapR0y2HuLNp7R1rf6Pl5um7gShHzihR-kWG5tD96mzZgwsO0UUhvHYT0zRl-vERdTlTWkaXEojgAmNB75L0Vjj8nM.DoCZpYVobL1ZOQEZ-Zjxlg"
     }
 };
 
