@@ -34,7 +34,7 @@ function getProxyBaseUrl() {
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.0.1',
+    version: '1.0.2',
     name: 'Subsunacs & Subs.sab.bz',
     description: 'Търси български субтитри от Subsunacs.net и Subs.sab.bz',
     logo: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
@@ -156,10 +156,10 @@ app.get('/proxy', async (req, res) => {
             return await extractFromRar(buffer, res, season, episode);
         } else {
             const text = buffer.toString('utf8').substring(0, 200);
-            if (text.includes('-->') || /^\d+\s*\n\d{2}:\d{2}/.test(text)) {
+            if (text.includes('-->') || /^\\d+\\s*\\n\\d{2}:\\d{2}/.test(text)) {
                 console.log('[Proxy] Detected SRT file directly');
                 let content = buffer.toString('utf8');
-                if (content.includes('') || /[\x80-\x9F]/.test(content)) {
+                if (content.includes('') || /[\\x80-\\x9F]/.test(content)) {
                     content = iconv.decode(buffer, 'win1251');
                 }
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -177,7 +177,7 @@ app.get('/proxy', async (req, res) => {
 });
 
 function findSubtitleForEpisode(files, season, episode) {
-    const subtitleExtensions = ['.srt', '.sub', '.ssa', '.ass'];
+    const subtitleExtensions = ['.srt', '.ssa', '.ass', '.vtt'];
     
     const subFiles = files.filter(f => {
         const name = (f.path || f.name || f.entryName || '').toLowerCase();
@@ -196,7 +196,7 @@ function findSubtitleForEpisode(files, season, episode) {
         const patterns = [
             new RegExp(`s0*${sNum}e0*${eNum}`, 'i'),
             new RegExp(`\\b0*${sNum}x0*${eNum}\\b`, 'i'),
-            new RegExp(`[\\.\_\\-\\s]0*${eNum}[\\.\_\\-\\s]`, 'i'),
+            new RegExp(`[\\.\\_\\-\\\s]0*${eNum}[\\.\\_\\-\\\s]`, 'i'),
             new RegExp(`e0*${eNum}[^0-9]`, 'i'),
         ];
         
@@ -274,7 +274,7 @@ function sendSubtitleContent(subBuffer, res) {
     let content;
     try {
         content = subBuffer.toString('utf8');
-        if (content.includes('') || /[\x80-\x9F]/.test(content)) {
+        if (content.includes('') || /[\\x80-\\x9F]/.test(content)) {
             content = iconv.decode(subBuffer, 'win1251');
         }
     } catch (e) {
