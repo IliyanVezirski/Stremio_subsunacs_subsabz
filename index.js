@@ -1,7 +1,7 @@
 const { addonBuilder, getRouter } = require('stremio-addon-sdk');
 const express = require('express');
 const axios = require('axios');
-const unzipper = require('unzipper');
+const AdmZip = require('adm-zip');
 const { createExtractorFromData } = require('node-unrar-js');
 const iconv = require('iconv-lite');
 const subsunacs = require('./providers/subsunacs');
@@ -149,8 +149,8 @@ app.get('/proxy', async (req, res) => {
         }
         
         if (isZip) {
-            console.log('[Proxy] Detected ZIP file, extracting...');
-            return await extractFromZip(buffer, res, season, episode);
+            console.log('[Proxy] Detected ZIP file, extracting with adm-zip...');
+            return extractFromZip(buffer, res, season, episode);
         } else if (isRar) {
             console.log('[Proxy] Detected RAR file, extracting...');
             return await extractFromRar(buffer, res, season, episode);
@@ -180,7 +180,7 @@ function findSubtitleForEpisode(files, season, episode) {
     const subtitleExtensions = ['.srt', '.sub', '.ssa', '.ass'];
     
     const subFiles = files.filter(f => {
-        const name = (f.path || f.name || '').toLowerCase();
+        const name = (f.path || f.name || f.entryName || '').toLowerCase();
         return subtitleExtensions.some(ext => name.endsWith(ext));
     });
     
@@ -202,33 +202,34 @@ function findSubtitleForEpisode(files, season, episode) {
         
         for (const pattern of patterns) {
             const match = subFiles.find(f => {
-                const name = (f.path || f.name || '');
+                const name = (f.path || f.name || f.entryName || '');
                 return pattern.test(name);
             });
             if (match) {
-                console.log(`[Proxy] Found episode match: ${match.path || match.name}`);
+                console.log(`[Proxy] Found episode match: ${match.path || match.name || match.entryName}`);
                 return match;
             }
         }
         
-        console.log(`[Proxy] No specific episode file found for S${s}E${e}, files:`, subFiles.map(f => f.path || f.name));
+        console.log(`[Proxy] No specific episode file found for S${s}E${e}, files:`, subFiles.map(f => f.path || f.name || f.entryName));
     }
     
     return subFiles[0];
 }
 
-async function extractFromZip(buffer, res, season = null, episode = null) {
+function extractFromZip(buffer, res, season = null, episode = null) {
     try {
-        const directory = await unzipper.Open.buffer(buffer);
-        const subFile = findSubtitleForEpisode(directory.files, season, episode);
+        const zip = new AdmZip(buffer);
+        const zipEntries = zip.getEntries();
+        const subFile = findSubtitleForEpisode(zipEntries, season, episode);
         
         if (!subFile) {
             console.log('[Proxy] No subtitle file found in ZIP');
             return res.status(404).send('No subtitle file found in archive');
         }
 
-        console.log(`[Proxy] Extracting from ZIP: ${subFile.path}`);
-        const subBuffer = await subFile.buffer();
+        console.log(`[Proxy] Extracting from ZIP: ${subFile.entryName}`);
+        const subBuffer = zip.readFile(subFile);
         return sendSubtitleContent(subBuffer, res);
         
     } catch (error) {
