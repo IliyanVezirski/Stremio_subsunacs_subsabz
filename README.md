@@ -8,11 +8,11 @@ Stremio addon за български субтитри от **Subsunacs.net** и
 
 ## 🚀 Инсталация (един клик!)
 
-### 📥 [Кликни тук за да инсталираш](https://bulgarian-subs-addon.onrender.com/manifest.json)
+### 📥 [Кликни тук за да инсталираш](https://stremio-subsunacs-subssab.fly.dev/manifest.json)
 
 Или копирай този URL в Stremio:
 ```
-https://bulgarian-subs-addon.onrender.com/manifest.json
+https://stremio-subsunacs-subssab.fly.dev/manifest.json
 ```
 
 ### Ръчна инсталация:
