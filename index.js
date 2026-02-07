@@ -16,14 +16,13 @@ const BASE_URL = 'https://bulgarian-subs-addon.onrender.com';
 const CACHE_TTL = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 const cache = {};
 
-// Function to get the actual base URL
-function getProxyBaseUrl() {
-    return BASE_URL;
+function getProxyUrl(sub) {
+    return `${BASE_URL}/proxy?url=${encodeURIComponent(sub.url)}&source=${sub.id.split('_')[0]}`;
 }
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.0.3', // Incremented version
+    version: '1.0.4', // Incremented version for bugfix
     name: 'Subsunacs & Subs.sab.bz',
     description: 'Търси български субтитри от Subsunacs.net и Subs.sab.bz с поддръжка на кеширане.',
     logo: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
@@ -46,10 +45,10 @@ const builder = new addonBuilder(manifest);
 builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
     console.log(`[Request] Type: ${type}, ID: ${id}`);
 
-    // Check cache first
     if (cache[id] && (Date.now() - cache[id].timestamp < CACHE_TTL)) {
         console.log(`[Cache] HIT for ${id}`);
-        return { subtitles: cache[id].subtitles };
+        const subtitles = cache[id].subtitles.map(sub => ({ ...sub, url: getProxyUrl(sub) }));
+        return { subtitles };
     }
     console.log(`[Cache] MISS for ${id}`);
 
@@ -71,24 +70,20 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
             })
         ]);
 
-        const allSubtitles = [...subsunacsSubs, ...subsSabSubs].map(sub => {
-            let proxyUrl = `${getProxyBaseUrl()}/proxy?url=${encodeURIComponent(sub.url)}&source=${sub.id.split('_')[0]}`;
-            if (type === 'series' && season && episode) {
-                proxyUrl += `&season=${season}&episode=${episode}`;
-            }
-            return { ...sub, url: proxyUrl };
-        });
+        const rawSubtitles = [...subsunacsSubs, ...subsSabSubs];
         
-        console.log(`[Result] Found ${allSubtitles.length} subtitles for ${id}`);
+        console.log(`[Result] Found ${rawSubtitles.length} subtitles for ${id}`);
 
-        // Store in cache
+        // Store raw subtitles in cache
         cache[id] = {
-            subtitles: allSubtitles,
+            subtitles: rawSubtitles,
             timestamp: Date.now()
         };
         console.log(`[Cache] STORED for ${id}`);
 
-        return { subtitles: allSubtitles };
+        const proxiedSubtitles = rawSubtitles.map(sub => ({ ...sub, url: getProxyUrl(sub) }));
+
+        return { subtitles: proxiedSubtitles };
     } catch (error) {
         console.error('[Handler Error]', error);
         return { subtitles: [] };
@@ -138,11 +133,8 @@ app.get('/proxy', async (req, res) => {
         
         console.log(`[Proxy] Downloaded ${buffer.length} bytes`);
         
-        const firstBytes = buffer.slice(0, 20).toString('hex');
-        console.log(`[Proxy] File signature: ${firstBytes}`);
-        
         const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
-        const isRar = buffer[0] === 0x52 && buffer[1] === 0x72 && buffer[2] === 0x61;
+        const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72; // Corrected RAR check
         
         const textStart = buffer.toString('utf8', 0, 100).toLowerCase();
         if (textStart.includes('<!doctype') || textStart.includes('<html>') || textStart.includes('error')) {
