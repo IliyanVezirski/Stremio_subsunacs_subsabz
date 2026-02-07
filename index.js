@@ -7,25 +7,9 @@ const iconv = require('iconv-lite');
 const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 
-// Define port and base URL dynamically
+// Define port and base URL
 const PORT = process.env.PORT || 8080;
-let BASE_URL;
-
-if (process.env.FLY_APP_NAME) {
-    // Fly.io environment
-    BASE_URL = `https://${process.env.FLY_APP_NAME}.fly.dev`;
-} else if (process.env.RENDER_EXTERNAL_URL) {
-    // Render.com environment (fallback)
-    BASE_URL = process.env.RENDER_EXTERNAL_URL;
-} else {
-    // Local environment
-    BASE_URL = `http://localhost:${PORT}`;
-}
-
-// Ensure https for production on Render
-if (BASE_URL.includes('onrender.com') && BASE_URL.startsWith('http://')) {
-    BASE_URL = BASE_URL.replace('http://', 'https://');
-}
+const BASE_URL = 'https://bulgarian-subs-addon.onrender.com';
 
 // Function to get the actual base URL
 function getProxyBaseUrl() {
@@ -142,7 +126,7 @@ app.get('/proxy', async (req, res) => {
         const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72;
         
         const textStart = buffer.toString('utf8', 0, 100).toLowerCase();
-        if (textStart.includes('<!doctype') || textStart.includes('<html') || textStart.includes('error')) {
+        if (textStart.includes('<!doctype') || textStart.includes('<html>') || textStart.includes('error')) {
             console.log('[Proxy] Received HTML error page instead of archive');
             console.log('[Proxy] Content:', buffer.toString('utf8', 0, 300));
             return res.status(404).send('Download link returned error page');
@@ -156,10 +140,10 @@ app.get('/proxy', async (req, res) => {
             return await extractFromRar(buffer, res, season, episode);
         } else {
             const text = buffer.toString('utf8').substring(0, 200);
-            if (text.includes('-->') || /^\\d+\\s*\\n\\d{2}:\\d{2}/.test(text)) {
+            if (text.includes('-->') || /^\d+\s*\n\d{2}:\d{2}/.test(text)) {
                 console.log('[Proxy] Detected SRT file directly');
                 let content = buffer.toString('utf8');
-                if (content.includes('') || /[\\x80-\\x9F]/.test(content)) {
+                if (content.includes('') || /[\x80-\x9F]/.test(content)) {
                     content = iconv.decode(buffer, 'win1251');
                 }
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -274,7 +258,7 @@ function sendSubtitleContent(subBuffer, res) {
     let content;
     try {
         content = subBuffer.toString('utf8');
-        if (content.includes('') || /[\\x80-\\x9F]/.test(content)) {
+        if (content.includes('') || /[\x80-\x9F]/.test(content)) {
             content = iconv.decode(subBuffer, 'win1251');
         }
     } catch (e) {
