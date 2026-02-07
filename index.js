@@ -1,3 +1,4 @@
+
 const { addonBuilder, getRouter } = require('stremio-addon-sdk');
 const express = require('express');
 const axios = require('axios');
@@ -11,6 +12,10 @@ const subsSab = require('./providers/subssab');
 const PORT = process.env.PORT || 8080;
 const BASE_URL = 'https://bulgarian-subs-addon.onrender.com';
 
+// Cache configuration
+const CACHE_TTL = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+const cache = {};
+
 // Function to get the actual base URL
 function getProxyBaseUrl() {
     return BASE_URL;
@@ -18,9 +23,9 @@ function getProxyBaseUrl() {
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.0.2',
+    version: '1.0.3', // Incremented version
     name: 'Subsunacs & Subs.sab.bz',
-    description: 'Търси български субтитри от Subsunacs.net и Subs.sab.bz',
+    description: 'Търси български субтитри от Subsunacs.net и Subs.sab.bz с поддръжка на кеширане.',
     logo: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
     resources: ['subtitles'],
     types: ['movie', 'series'],
@@ -40,7 +45,14 @@ const builder = new addonBuilder(manifest);
 
 builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
     console.log(`[Request] Type: ${type}, ID: ${id}`);
-    
+
+    // Check cache first
+    if (cache[id] && (Date.now() - cache[id].timestamp < CACHE_TTL)) {
+        console.log(`[Cache] HIT for ${id}`);
+        return { subtitles: cache[id].subtitles };
+    }
+    console.log(`[Cache] MISS for ${id}`);
+
     const [imdbId, season, episode] = id.split(':');
     
     if (!imdbId || !imdbId.startsWith('tt')) {
@@ -67,8 +79,15 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
             return { ...sub, url: proxyUrl };
         });
         
-        console.log(`[Result] Found ${allSubtitles.length} subtitles`);
-        
+        console.log(`[Result] Found ${allSubtitles.length} subtitles for ${id}`);
+
+        // Store in cache
+        cache[id] = {
+            subtitles: allSubtitles,
+            timestamp: Date.now()
+        };
+        console.log(`[Cache] STORED for ${id}`);
+
         return { subtitles: allSubtitles };
     } catch (error) {
         console.error('[Handler Error]', error);
@@ -123,7 +142,7 @@ app.get('/proxy', async (req, res) => {
         console.log(`[Proxy] File signature: ${firstBytes}`);
         
         const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
-        const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72;
+        const isRar = buffer[0] === 0x52 && buffer[1] === 0x72 && buffer[2] === 0x61;
         
         const textStart = buffer.toString('utf8', 0, 100).toLowerCase();
         if (textStart.includes('<!doctype') || textStart.includes('<html>') || textStart.includes('error')) {
@@ -143,7 +162,7 @@ app.get('/proxy', async (req, res) => {
             if (text.includes('-->') || /^\d+\s*\n\d{2}:\d{2}/.test(text)) {
                 console.log('[Proxy] Detected SRT file directly');
                 let content = buffer.toString('utf8');
-                if (content.includes('') || /[\x80-\x9F]/.test(content)) {
+                if (content.includes('\ufffd') || /[\x80-\x9F]/.test(content)) {
                     content = iconv.decode(buffer, 'win1251');
                 }
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -258,7 +277,7 @@ function sendSubtitleContent(subBuffer, res) {
     let content;
     try {
         content = subBuffer.toString('utf8');
-        if (content.includes('') || /[\x80-\x9F]/.test(content)) {
+        if (content.includes('\ufffd') || /[\x80-\x9F]/.test(content)) {
             content = iconv.decode(subBuffer, 'win1251');
         }
     } catch (e) {
@@ -274,35 +293,14 @@ app.get('/debug', async (req, res) => {
     const results = {
         port: PORT,
         baseUrl: BASE_URL,
-        env: {
-            PORT: process.env.PORT,
-            FLY_APP_NAME: process.env.FLY_APP_NAME,
-            RENDER_EXTERNAL_URL: process.env.RENDER_EXTERNAL_URL
+        cache: {
+            size: Object.keys(cache).length,
+            ttl: CACHE_TTL
         },
-        tests: {}
+        env: {
+            PORT: process.env.PORT
+        }
     };
-    
-    try {
-        const response = await axios.get('https://v3-cinemeta.strem.io/meta/movie/tt1375666.json', { timeout: 10000 });
-        results.tests.cinemeta = { ok: true, title: response.data?.meta?.name };
-    } catch (e) {
-        results.tests.cinemeta = { ok: false, error: e.message };
-    }
-    
-    try {
-        const response = await axios.get('https://subsunacs.net/', { timeout: 10000 });
-        results.tests.subsunacs = { ok: true, status: response.status };
-    } catch (e) {
-        results.tests.subsunacs = { ok: false, error: e.message };
-    }
-    
-    try {
-        const response = await axios.get('https://subs.sab.bz/', { timeout: 10000 });
-        results.tests.subssab = { ok: true, status: response.status };
-    } catch (e) {
-        results.tests.subssab = { ok: false, error: e.message };
-    }
-    
     res.json(results);
 });
 
