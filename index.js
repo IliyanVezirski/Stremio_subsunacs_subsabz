@@ -16,8 +16,19 @@ const BASE_URL = 'https://bulgarian-subs-addon.onrender.com';
 const CACHE_TTL = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 const cache = {};
 
-function getProxyUrl(sub) {
-    return `${BASE_URL}/proxy?url=${encodeURIComponent(sub.url)}&source=${sub.id.split('_')[0]}`;
+function getProviderName(sub) {
+    const source = sub.id.split('_')[0];
+    if (source === 'subsunacs') return 'Subsunacs.net';
+    if (source === 'subssab') return 'Subs.sab.bz';
+    return source;
+}
+
+function getProxyUrl(sub, season, episode) {
+    let proxyUrl = `${BASE_URL}/proxy?url=${encodeURIComponent(sub.url)}&source=${sub.id.split('_')[0]}`;
+    if (season && episode) {
+        proxyUrl += `&season=${encodeURIComponent(season)}&episode=${encodeURIComponent(episode)}`;
+    }
+    return proxyUrl;
 }
 
 const manifest = {
@@ -45,14 +56,14 @@ const builder = new addonBuilder(manifest);
 builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
     console.log(`[Request] Type: ${type}, ID: ${id}`);
 
+    const [imdbId, season, episode] = id.split(':');
+
     if (cache[id] && (Date.now() - cache[id].timestamp < CACHE_TTL)) {
         console.log(`[Cache] HIT for ${id}`);
-        const subtitles = cache[id].subtitles.map(sub => ({ ...sub, url: getProxyUrl(sub) }));
+        const subtitles = cache[id].subtitles.map((sub, i) => ({ id: getProviderName(sub) + '_' + i, lang: 'bul', url: getProxyUrl(sub, season, episode) }));
         return { subtitles };
     }
     console.log(`[Cache] MISS for ${id}`);
-
-    const [imdbId, season, episode] = id.split(':');
     
     if (!imdbId || !imdbId.startsWith('tt')) {
         return { subtitles: [] };
@@ -81,7 +92,7 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
         };
         console.log(`[Cache] STORED for ${id}`);
 
-        const proxiedSubtitles = rawSubtitles.map(sub => ({ ...sub, url: getProxyUrl(sub) }));
+        const proxiedSubtitles = rawSubtitles.map((sub, i) => ({ id: getProviderName(sub) + '_' + i, lang: 'bul', url: getProxyUrl(sub, season, episode) }));
 
         return { subtitles: proxiedSubtitles };
     } catch (error) {

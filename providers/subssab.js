@@ -59,6 +59,8 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
             new RegExp(`\\bseason\\s*0*${sNum}\\b`, 'i'),     // Season 3
             new RegExp(`\\bs0*${sNum}[\\s\\.-]*(complete|full|all)`, 'i'), // S03 Complete
             new RegExp(`(complete|full).*s0*${sNum}\\b`, 'i'), // Complete S03
+            new RegExp(`\\b0*${sNum}\\b[\\s\\-]*(complete|full|all|season)`, 'i'), // 04 - Complete Season
+            new RegExp(`(complete|full|season)[\\s\\-]*0*${sNum}\\b`, 'i'), // Complete Season 04
         ];
         
         const hasSeasonEpisode = sePatterns.some(pattern => pattern.test(subName));
@@ -164,11 +166,6 @@ async function search(imdbId, type, season, episode) {
         console.log(`[Subs.sab.bz] Searching for: ${meta.name}${isSeries ? ` S${season}E${episode}` : ''} (year=${year || 'unknown'})`);
         
         let searchQuery = sanitizeSearchString(meta.name);
-        if (isSeries) {
-            const s = String(season).padStart(2, '0');
-            const e = String(episode).padStart(2, '0');
-            searchQuery = `${sanitizeSearchString(meta.name)} ${s}x${e}`;
-        }
         
         const searchUrl = `${BASE_URL}/index.php?act=search&movie=${encodeURIComponent(searchQuery)}&select-language=2`;
         
@@ -235,20 +232,29 @@ async function search(imdbId, type, season, episode) {
                 }
 
                 // If this is a season pack and an episode is requested, defer inspection of detail page
+                // Fall back to including the season pack itself if no episode-specific links found
                 if (isSeries && matchResult.isSeasonPack && season && episode) {
+                    const packHref = href;
+                    const packAttachId = attachId;
+                    const packScore = matchScore;
                     deferred.push(
-                        fetchEpisodeSubsFromSabDetail(href, season, episode).then((episodeSubs) => {
+                        fetchEpisodeSubsFromSabDetail(packHref, season, episode).then((episodeSubs) => {
                             if (episodeSubs && episodeSubs.length) {
                                 for (const es of episodeSubs) {
-                                    subtitles.push({ id: `subssab_${es.id || attachId}`, lang: 'bul', url: es.url, score: matchScore + 5 });
-                                    console.log(`[Subs.sab.bz] Episode found inside season pack: id=${es.id || attachId} name="${es.name}" href=${es.url}`);
+                                    subtitles.push({ id: `subssab_${es.id || packAttachId}`, lang: 'bul', url: es.url, score: packScore + 5 });
+                                    console.log(`[Subs.sab.bz] Episode found inside season pack: id=${es.id || packAttachId} name="${es.name}" href=${es.url}`);
                                 }
-                                return true;
+                            } else {
+                                // No episode-specific links found — include the season pack itself;
+                                // the proxy will download the archive and extract the correct episode file
+                                subtitles.push({ id: `subssab_${packAttachId}`, lang: 'bul', url: packHref, score: packScore });
+                                console.log(`[Subs.sab.bz] Season pack included (archive extraction): id=${packAttachId} name="${name}" href=${packHref}`);
                             }
-                            return false;
                         }).catch((e) => {
                             console.error('[Subs.sab.bz] Error fetching season pack details:', e && e.message ? e.message : e);
-                            return false;
+                            // On error, still include the season pack as fallback
+                            subtitles.push({ id: `subssab_${packAttachId}`, lang: 'bul', url: packHref, score: packScore });
+                            console.log(`[Subs.sab.bz] Season pack included after error: id=${packAttachId} href=${packHref}`);
                         })
                     );
                     return;

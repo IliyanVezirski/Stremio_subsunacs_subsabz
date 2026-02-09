@@ -59,6 +59,8 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
             new RegExp(`\\bseason\\s*0*${sNum}\\b`, 'i'),     // Season 3
             new RegExp(`\\bs0*${sNum}[\\s\\.-]*(complete|full|all)`, 'i'), // S03 Complete
             new RegExp(`(complete|full).*s0*${sNum}\\b`, 'i'), // Complete S03
+            new RegExp(`\\b0*${sNum}\\b[\\s\\-]*(complete|full|all|season)`, 'i'), // 04 - Complete Season
+            new RegExp(`(complete|full|season)[\\s\\-]*0*${sNum}\\b`, 'i'), // Complete Season 04
         ];
         
         const hasSeasonEpisode = sePatterns.some(pattern => pattern.test(subName));
@@ -162,16 +164,14 @@ async function search(imdbId, type, season, episode) {
         const year = meta.year ? String(meta.year).substring(0, 4) : '';
         const isSeries = type === 'series' && season && episode;
         
-        // Log search target (do not include year in the search string)
-        console.log(`[Subsunacs] Searching for: ${meta.name}${isSeries ? ` S${season}E${episode}` : ''} (year=${year || 'unknown'})`);
-        
-        // Build search query like Kodi addon
+        // Build search query
         let searchQuery = sanitizeSearchString(meta.name);
         if (isSeries) {
             const s = String(season).padStart(2, '0');
-            const e = String(episode).padStart(2, '0');
-            searchQuery = `${sanitizeSearchString(meta.name)} ${s}x${e}`;
+            searchQuery = `${sanitizeSearchString(meta.name)} ${s}`;
         }
+        
+        console.log(`[Subsunacs] Searching for: "${searchQuery}" (target: ${meta.name}${isSeries ? ` S${String(season).padStart(2,'0')}E${String(episode).padStart(2,'0')}` : ''}, year=${year || 'unknown'})`);
 
         // We'll request the first page via POST and then detect pagination and iterate further pages
         const searchParams = new URLSearchParams({
@@ -240,31 +240,40 @@ async function search(imdbId, type, season, episode) {
                 const matchScore = matchResult.score;
 
                 if (!href.startsWith('http')) {
-                    href = `${BASE_URL}/${href}`;
+                    href = `${BASE_URL}/${href.replace(/^\//, '')}`;
                 }
 
                 // Extract subtitle ID from URL
                 const idMatch = href.match(/-(\d+)\/?$/) || href.match(/id=(\d+)/);
                 const subId = idMatch ? idMatch[1] : (href + Math.random()).toString();
 
-                // If this is a season pack and user requested a specific episode, defer inspecting the details page
+                // If this is a season pack and user requested a specific episode,
+                // try to find episode-specific links on the detail page first,
+                // but fall back to including the season pack itself (the proxy will extract the right episode from the archive)
                 if (isSeries && matchResult.isSeasonPack && season && episode) {
+                    const packHref = href;
+                    const packSubId = subId;
+                    const packScore = matchScore;
                     deferred.push(
-                        fetchEpisodeSubtitlesFromSeasonPack(href, season, episode).then((episodeSubs) => {
+                        fetchEpisodeSubtitlesFromSeasonPack(packHref, season, episode).then((episodeSubs) => {
                             if (episodeSubs && episodeSubs.length) {
                                 for (const es of episodeSubs) {
-                                    subtitles.push({ id: `subsunacs_${es.id || subId}`, lang: 'bul', url: es.url, score: matchScore + 5 });
-                                    console.log(`[Subsunacs] Episode found inside season pack: id=${es.id || subId} name="${es.name}" href=${es.url}`);
+                                    subtitles.push({ id: `subsunacs_${es.id || packSubId}`, lang: 'bul', url: es.url, score: packScore + 5 });
+                                    console.log(`[Subsunacs] Episode found inside season pack: id=${es.id || packSubId} name="${es.name}" href=${es.url}`);
                                 }
-                                return true;
+                            } else {
+                                // No episode-specific links found — include the season pack itself;
+                                // the proxy will download the archive and extract the correct episode file
+                                subtitles.push({ id: `subsunacs_${packSubId}`, lang: 'bul', url: packHref, score: packScore });
+                                console.log(`[Subsunacs] Season pack included (archive extraction): id=${packSubId} name="${name}" href=${packHref}`);
                             }
-                            return false;
                         }).catch((e) => {
                             console.error('[Subsunacs] Error fetching season pack details:', e && e.message ? e.message : e);
-                            return false;
+                            // On error, still include the season pack as fallback
+                            subtitles.push({ id: `subsunacs_${packSubId}`, lang: 'bul', url: packHref, score: packScore });
+                            console.log(`[Subsunacs] Season pack included after error: id=${packSubId} href=${packHref}`);
                         })
                     );
-                    // continue, do not add season pack now; episode-specific results will be added by deferred handler
                     return;
                 }
 
@@ -277,19 +286,25 @@ async function search(imdbId, type, season, episode) {
                 console.log(`[Subsunacs] Match found: id=${subId} name="${name}" year=${subtitleYear || '?'} score=${matchScore} href=${href}`);
             });
 
-            // detect numeric pagination
-            const pageNums = [];
-            $('a').each((i, el) => {
-                const t = $(el).text().trim();
-                if (/^\d+$/.test(t)) pageNums.push(parseInt(t, 10));
+            // detect pagination from <select> dropdown (options like "Стр. 1", "Стр. 2", ...)
+            let maxPage = 1;
+            $('select').each((i, sel) => {
+                $(sel).find('option').each((j, opt) => {
+                    const txt = $(opt).text().trim();
+                    const val = $(opt).attr('value');
+                    // Match "Стр. N" pattern used by subsunacs pagination
+                    const m = txt.match(/Стр\.\s*(\d+)/);
+                    if (m) {
+                        const pNum = parseInt(m[1], 10);
+                        if (pNum > maxPage) maxPage = pNum;
+                    }
+                });
             });
-            return pageNums.length ? Math.max(...pageNums) : 1;
+            return maxPage;
         };
 
             // Fetch details page of a season pack and search for episode-specific subtitle links
             function fetchEpisodeSubtitlesFromSeasonPack(detailUrl, season, episode) {
-                // synchronous wrapper returning array via Promise (we'll call without await inside cheerio loop using a cached promise)
-                // but for simplicity in this scraping flow we'll perform a synchronous-looking fetch via axios (return Promise)
                 return (async () => {
                     try {
                         const resp = await axios.get(detailUrl, {
@@ -306,8 +321,8 @@ async function search(imdbId, type, season, episode) {
                         const patterns = [
                             new RegExp(`s0*${parseInt(season)}e0*${parseInt(episode)}`, 'i'),
                             new RegExp(`${parseInt(season)}x0*${parseInt(episode)}`, 'i'),
-                            new RegExp(`\b${s}x${e}\b`, 'i'),
-                            new RegExp(`\b${parseInt(episode)}\b`)
+                            new RegExp(`\\b${s}x${e}\\b`, 'i'),
+                            new RegExp(`\\b${parseInt(episode)}\\b`)
                         ];
 
                         $d('a').each((i, el) => {
@@ -318,7 +333,6 @@ async function search(imdbId, type, season, episode) {
                                 if (pat.test(text) || pat.test(href2)) {
                                     let full = href2;
                                     if (!full.startsWith('http')) full = `${BASE_URL}/${full.replace(/^\//, '')}`;
-                                    // attempt to extract id
                                     const idm = full.match(/-(\d+)\/?$/) || full.match(/id=(\d+)/);
                                     const idv = idm ? idm[1] : null;
                                     candidates.push({ id: idv, url: full, name: text || '' });
@@ -338,37 +352,17 @@ async function search(imdbId, type, season, episode) {
         const firstHtml = iconv.decode(Buffer.from(firstResponse.data), 'win1251');
         let maxFoundPage = parsePage(firstHtml);
 
-        // If multiple pages, iterate pages via GET adding 'page' param
+        // If multiple pages, iterate pages via GET using the p= parameter format that subsunacs uses
         for (let page = 2; page <= Math.min(maxFoundPage, maxPagesLimit); page++) {
-            // Build URL with query params similar to the POST
-            let pageUrl;
-            try {
-                const urlObj = new URL(SEARCH_URL);
-                urlObj.searchParams.set('m', searchQuery);
-                urlObj.searchParams.set('l', '0');
-                // Do not include year in GET page requests; keep y=0 to avoid filtering by search engine
-                urlObj.searchParams.set('y', '0');
-                urlObj.searchParams.set('t', 'Submit');
-                urlObj.searchParams.set('page', String(page));
-                pageUrl = urlObj.toString();
-            } catch (e) {
-                pageUrl = `${SEARCH_URL}?m=${encodeURIComponent(searchQuery)}&l=0&y=0&t=Submit&page=${page}`;
-            }
-
+            const pageUrl = `${SEARCH_URL}?t=1&m=${encodeURIComponent(searchQuery)}&y=0&u=&c=&l=0&a=&d=&g=&o=0&s=0&memid=0&p=${page}`;
             console.log(`[Subsunacs] Fetching page ${page}: ${pageUrl}`);
-
             try {
                 const resp = await axios.get(pageUrl, {
                     responseType: 'arraybuffer',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0',
-                        'Accept-Language': 'bg,en;q=0.9',
-                        'Referer': BASE_URL
-                    },
+                    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'bg,en;q=0.9', 'Referer': BASE_URL },
                     timeout: 15000
                 });
                 const html = iconv.decode(Buffer.from(resp.data), 'win1251');
-                // update maxFoundPage in case later pages reveal more
                 const maybeMax = parsePage(html);
                 if (maybeMax > maxFoundPage) maxFoundPage = maybeMax;
             } catch (err) {
