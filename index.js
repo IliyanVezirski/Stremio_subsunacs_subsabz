@@ -35,10 +35,10 @@ function getProxyUrl(sub, season, episode) {
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.0.5',
-    name: 'Subsunacs & Subs.sab.bz & SubsLand',
-    description: 'Търси български субтитри от Subsunacs.net, Subs.sab.bz и SubsLand.com с поддръжка на кеширане.',
-    logo: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
+    version: '1.1.5',
+    name: 'Bulgarian Subtitles',
+    description: 'Български субтитри.',
+    logo: 'https://cdn-icons-png.flaticon.com/512/16135/16135593.png',
     resources: ['subtitles'],
     types: ['movie', 'series'],
     catalogs: [],
