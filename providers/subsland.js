@@ -26,76 +26,53 @@ const BROWSER_HEADERS = {
     'Sec-Ch-Ua-Platform': '"Windows"'
 };
 
-// Session cookie cache
-let cachedCookies = null;
-let cookieTimestamp = 0;
-const COOKIE_TTL = 30 * 60 * 1000; // 30 minutes
+const JINA_PREFIX = 'https://r.jina.ai/';
 
 /**
- * Get a valid session by visiting the homepage first to collect Cloudflare cookies.
- * Caches cookies for reuse.
+ * Fetch an HTML page from SubsLand, bypassing Cloudflare.
+ * Strategy: try direct request first, fall back to Jina AI proxy on 403.
  */
-async function getSessionCookies() {
-    if (cachedCookies && (Date.now() - cookieTimestamp < COOKIE_TTL)) {
-        return cachedCookies;
-    }
-
+async function fetchPage(url) {
+    // Try direct request first
     try {
-        console.log('[SubsLand] Refreshing session cookies...');
-        const resp = await axios.get(BASE_URL, {
-            headers: { ...BROWSER_HEADERS, 'Referer': 'https://www.google.com/' },
+        const resp = await axios.get(url, {
+            headers: BROWSER_HEADERS,
             timeout: 15000,
-            maxRedirects: 5,
-            validateStatus: () => true // Accept any status to read cookies
+            maxRedirects: 5
         });
-
-        const setCookieHeaders = resp.headers['set-cookie'] || [];
-        const cookies = setCookieHeaders.map(c => c.split(';')[0]).join('; ');
-        
-        if (cookies) {
-            cachedCookies = cookies;
-            cookieTimestamp = Date.now();
-            console.log(`[SubsLand] Got session cookies: ${cookies.substring(0, 80)}...`);
-        } else {
-            cachedCookies = '';
-            cookieTimestamp = Date.now();
-            console.log('[SubsLand] No cookies returned, proceeding without');
+        if (resp.status === 200) return resp.data;
+    } catch (err) {
+        if (!err.response || err.response.status !== 403) {
+            throw err;
         }
-
-        return cachedCookies;
-    } catch (e) {
-        console.error('[SubsLand] Cookie fetch error:', e.message);
-        return cachedCookies || '';
+        console.log('[SubsLand] Direct request got 403, using Jina AI proxy...');
     }
+
+    // Fallback: Jina AI proxy
+    const jinaUrl = `${JINA_PREFIX}${url}`;
+    const resp = await axios.get(jinaUrl, {
+        headers: {
+            'Accept': 'text/html',
+            'X-Return-Format': 'html'
+        },
+        timeout: 20000
+    });
+    return resp.data;
 }
 
 /**
- * Make an HTTP GET request with session cookies and browser headers.
+ * Download a binary file from SubsLand (not behind Cloudflare).
  */
-async function sessionGet(url, extraHeaders = {}, opts = {}) {
-    const cookies = await getSessionCookies();
-    const headers = {
-        ...BROWSER_HEADERS,
-        ...extraHeaders,
-        'Referer': extraHeaders['Referer'] || BASE_URL
-    };
-    if (cookies) headers['Cookie'] = cookies;
-
-    const response = await axios.get(url, {
-        headers,
-        timeout: 15000,
-        maxRedirects: 5,
-        ...opts
+async function fetchBinary(url, referer) {
+    const resp = await axios.get(url, {
+        responseType: 'arraybuffer',
+        headers: {
+            ...BROWSER_HEADERS,
+            'Referer': referer || BASE_URL
+        },
+        timeout: 30000
     });
-
-    // Update cookies if new ones are returned
-    const newCookies = response.headers['set-cookie'];
-    if (newCookies && newCookies.length) {
-        cachedCookies = newCookies.map(c => c.split(';')[0]).join('; ');
-        cookieTimestamp = Date.now();
-    }
-
-    return response;
+    return Buffer.from(resp.data);
 }
 
 /**
@@ -341,28 +318,13 @@ async function search(imdbId, type, season, episode) {
 
         // Fetch first page
         const searchUrl = `${SEARCH_URL}?s=${encodeURIComponent(searchQuery)}&w=name&category=1`;
-        let firstResponse;
+        let firstHtml;
         try {
-            firstResponse = await sessionGet(searchUrl);
+            firstHtml = await fetchPage(searchUrl);
         } catch (err) {
             console.error('[SubsLand] Search request failed:', err.message);
-            // On 403, invalidate cookies and retry once
-            if (err.response && err.response.status === 403) {
-                console.log('[SubsLand] Got 403, invalidating cookies and retrying...');
-                cachedCookies = null;
-                cookieTimestamp = 0;
-                try {
-                    firstResponse = await sessionGet(searchUrl);
-                } catch (err2) {
-                    console.error('[SubsLand] Retry also failed:', err2.message);
-                    return [];
-                }
-            } else {
-                return [];
-            }
+            return [];
         }
-
-        const firstHtml = firstResponse.data;
         let maxFoundPage = parsePage(firstHtml);
 
         // If multiple pages, fetch them
@@ -370,8 +332,8 @@ async function search(imdbId, type, season, episode) {
             const pageUrl = `${SEARCH_URL}?s=${encodeURIComponent(searchQuery)}&w=name&category=1&page=${page}`;
             console.log(`[SubsLand] Fetching page ${page + 1}: ${pageUrl}`);
             try {
-                const resp = await sessionGet(pageUrl);
-                const maybeMax = parsePage(resp.data);
+                const pageHtml = await fetchPage(pageUrl);
+                const maybeMax = parsePage(pageHtml);
                 if (maybeMax > maxFoundPage) maxFoundPage = maybeMax;
             } catch (err) {
                 console.error('[SubsLand] Page fetch error:', err.message);
@@ -386,8 +348,8 @@ async function search(imdbId, type, season, episode) {
             console.log(`[SubsLand] No episode results, trying broader search: "${broaderQuery}"`);
             const broaderUrl = `${SEARCH_URL}?s=${encodeURIComponent(broaderQuery)}&w=name&category=1`;
             try {
-                const resp = await sessionGet(broaderUrl);
-                parsePage(resp.data);
+                const broaderHtml = await fetchPage(broaderUrl);
+                parsePage(broaderHtml);
             } catch (err) {
                 console.error('[SubsLand] Broader search failed:', err.message);
             }
@@ -421,20 +383,16 @@ async function download(downloadUrl) {
 
         // If the URL is a direct download link (/downloadsubtitles/), fetch it directly
         if (downloadUrl.includes('/downloadsubtitles/')) {
-            const response = await sessionGet(downloadUrl, {}, {
-                responseType: 'arraybuffer',
-                timeout: 30000
-            });
-
-            console.log(`[SubsLand] Downloaded ${response.data.byteLength} bytes`);
-            return Buffer.from(response.data);
+            const buffer = await fetchBinary(downloadUrl);
+            console.log(`[SubsLand] Downloaded ${buffer.length} bytes`);
+            return buffer;
         }
 
         // Otherwise it's a detail page URL - scrape the download link from it
         console.log(`[SubsLand] Fetching detail page for download link: ${downloadUrl}`);
-        const detailResponse = await sessionGet(downloadUrl);
+        const detailHtml = await fetchPage(downloadUrl);
 
-        const $ = cheerio.load(detailResponse.data);
+        const $ = cheerio.load(detailHtml);
         let dlUrl = null;
 
         // Look for download link in /downloadsubtitles/ path
@@ -452,13 +410,9 @@ async function download(downloadUrl) {
         }
 
         console.log(`[SubsLand] Downloading: ${dlUrl}`);
-        const response = await sessionGet(dlUrl, { 'Referer': downloadUrl }, {
-            responseType: 'arraybuffer',
-            timeout: 30000
-        });
-
-        console.log(`[SubsLand] Downloaded ${response.data.byteLength} bytes`);
-        return Buffer.from(response.data);
+        const buffer = await fetchBinary(dlUrl, downloadUrl);
+        console.log(`[SubsLand] Downloaded ${buffer.length} bytes`);
+        return buffer;
 
     } catch (error) {
         console.error('[SubsLand] Download error:', error.message);
