@@ -29,26 +29,9 @@ const BROWSER_HEADERS = {
 const JINA_PREFIX = 'https://r.jina.ai/';
 
 /**
- * Fetch an HTML page from SubsLand, bypassing Cloudflare.
- * Strategy: try direct request first, fall back to Jina AI proxy on 403.
+ * Fetch an HTML page from SubsLand via Jina AI proxy (bypasses Cloudflare).
  */
 async function fetchPage(url) {
-    // Try direct request first
-    try {
-        const resp = await axios.get(url, {
-            headers: BROWSER_HEADERS,
-            timeout: 15000,
-            maxRedirects: 5
-        });
-        if (resp.status === 200) return resp.data;
-    } catch (err) {
-        if (!err.response || err.response.status !== 403) {
-            throw err;
-        }
-        console.log('[SubsLand] Direct request got 403, using Jina AI proxy...');
-    }
-
-    // Fallback: Jina AI proxy
     const jinaUrl = `${JINA_PREFIX}${url}`;
     const resp = await axios.get(jinaUrl, {
         headers: {
