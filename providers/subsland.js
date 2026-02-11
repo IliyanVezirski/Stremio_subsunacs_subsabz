@@ -210,7 +210,7 @@ async function search(imdbId, type, season, episode) {
         console.log(`[SubsLand] Searching for: "${searchQuery}" (target: ${meta.name}${isSeries ? ` S${String(season).padStart(2,'0')}E${String(episode).padStart(2,'0')}` : ''}, year=${year || 'unknown'})`);
 
         const subtitles = [];
-        const maxPagesLimit = 2;
+        const maxPagesLimit = 4;
 
         // Parse a page and collect subtitles using regex (cheerio breaks table structure with Jina HTML)
         const parsePage = (html) => {
