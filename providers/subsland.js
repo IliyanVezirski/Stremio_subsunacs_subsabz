@@ -215,48 +215,46 @@ async function search(imdbId, type, season, episode) {
         console.log(`[SubsLand] Searching for: "${searchQuery}" (target: ${meta.name}${isSeries ? ` S${String(season).padStart(2,'0')}E${String(episode).padStart(2,'0')}` : ''}, year=${year || 'unknown'})`);
 
         const subtitles = [];
-        const maxPagesLimit = 5;
+        const maxPagesLimit = 3;
 
-        // Parse a page and collect subtitles
+        // Parse a page and collect subtitles using regex (cheerio breaks table structure with Jina HTML)
         const parsePage = (html) => {
-            const $ = cheerio.load(html);
+            // Only parse after the search results marker to skip featured/carousel section
+            const marker = 'Търсенето на субтитри приключи';
+            const markerIdx = html.indexOf(marker);
+            const resultHtml = markerIdx > -1 ? html.substring(markerIdx) : html;
 
-            // Each search result row is a <tr> with subtitle link, download link, and IMDB link
-            $('tr').each((index, row) => {
-                const $row = $(row);
+            // Extract each <tr> block with regex
+            const trRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
+            const trBlocks = resultHtml.match(trRegex) || [];
 
-                // Find the subtitle title link (links to /subtitles/NAME-ID.html)
-                const $titleLink = $row.find('a[href*="/subtitles/"]').first();
-                if (!$titleLink.length) return;
+            for (const trBlock of trBlocks) {
+                // Must have BOTH a /subtitles/ link AND a /downloadsubtitles/ link (filters out non-results)
+                const subMatch = trBlock.match(/href=["']?(https?:\/\/subsland\.com\/subtitles\/[^"'\s>]+)/i);
+                const dlMatch = trBlock.match(/href=["']?(https?:\/\/subsland\.com\/downloadsubtitles\/[^"'\s>]+)/i);
+                if (!subMatch || !dlMatch) continue;
 
-                const titleHref = $titleLink.attr('href') || '';
-                if (!titleHref.includes('/subtitles/')) return;
-
-                const name = $titleLink.text().trim();
-                if (!name || name.length < 2) return;
-
-                // Extract subtitle ID from the URL (format: NAME-ID.html)
-                const idMatch = titleHref.match(/-(\d+)\.html/);
-                if (!idMatch) return;
+                const subHref = subMatch[1];
+                const idMatch = subHref.match(/-(\d+)\.html/);
+                if (!idMatch) continue;
                 const subId = idMatch[1];
 
-                // Find the direct download link (links to /downloadsubtitles/)
-                const $downloadLink = $row.find('a[href*="/downloadsubtitles/"]');
-                let downloadUrl = null;
-                if ($downloadLink.length) {
-                    downloadUrl = $downloadLink.attr('href') || null;
-                    if (downloadUrl && !downloadUrl.startsWith('http')) {
-                        downloadUrl = `${BASE_URL}/${downloadUrl.replace(/^\//, '')}`;
-                    }
+                let downloadUrl = dlMatch[1];
+                if (!downloadUrl.startsWith('http')) {
+                    downloadUrl = `${BASE_URL}/${downloadUrl.replace(/^\//, '')}`;
                 }
 
-                // If no direct download link found, we'll construct one from the detail page later
-                if (!downloadUrl) {
-                    downloadUrl = titleHref;
-                    if (!downloadUrl.startsWith('http')) {
-                        downloadUrl = `${BASE_URL}/${downloadUrl.replace(/^\//, '')}`;
-                    }
+                // Extract title: parse just this <tr> block with cheerio for reliable text extraction
+                const $tr = cheerio.load(trBlock);
+                const $titleLink = $tr('a[href*="/subtitles/"]').first();
+                let name = $titleLink.text().trim();
+
+                // Fallback: extract from onmouseover tooltip (has release name)
+                if (!name || name.length < 2) {
+                    const tipMatch = trBlock.match(/Tip\(['"]<font[^>]*><b>([^<]+)<\/b>/i);
+                    if (tipMatch) name = tipMatch[1].trim();
                 }
+                if (!name || name.length < 2) continue;
 
                 // Extract year from the title text (e.g., "Gladiator II (2024)")
                 let subtitleYear = null;
@@ -265,14 +263,14 @@ async function search(imdbId, type, season, episode) {
 
                 // If page provides a year and it doesn't match movie year, skip
                 if (!isSeries && subtitleYear && year && String(subtitleYear) !== String(year)) {
-                    return;
+                    continue;
                 }
 
                 // Check if subtitle matches our movie/series
                 const matchResult = isSeries
                     ? isGoodMatch(name, meta.name, null, season, episode)
                     : isGoodMatch(name, meta.name, year);
-                if (!matchResult.match) return;
+                if (!matchResult.match) continue;
 
                 const matchScore = matchResult.score;
 
@@ -284,18 +282,16 @@ async function search(imdbId, type, season, episode) {
                     url: downloadUrl,
                     score: matchScore
                 });
-            });
+            }
 
-            // Detect pagination: look for page links like "21 - 40" or page numbers
+            // Detect pagination from raw HTML
             let maxPage = 0;
-            $('a[href*="&page="]').each((i, el) => {
-                const href = $(el).attr('href') || '';
-                const pageMatch = href.match(/[&?]page=(\d+)/);
-                if (pageMatch) {
-                    const pNum = parseInt(pageMatch[1], 10);
-                    if (pNum > maxPage) maxPage = pNum;
-                }
-            });
+            const pageRegex = /[&?]page=(\d+)/g;
+            let pm;
+            while ((pm = pageRegex.exec(resultHtml)) !== null) {
+                const pNum = parseInt(pm[1], 10);
+                if (pNum > maxPage) maxPage = pNum;
+            }
             return maxPage;
         };
 
@@ -324,17 +320,16 @@ async function search(imdbId, type, season, episode) {
             }
         }
 
-        // If it's a series and we found no results, try broader search with just the title and season
+        // Fallback for series: if no results with title+SxxExx, try with just title
         if (isSeries && subtitles.length === 0) {
-            const s = String(season).padStart(2, '0');
-            const broaderQuery = `${sanitizeSearchString(meta.name)} S${s}`;
-            console.log(`[SubsLand] No episode results, trying broader search: "${broaderQuery}"`);
-            const broaderUrl = `${SEARCH_URL}?s=${encodeURIComponent(broaderQuery)}&w=name&category=1`;
+            const titleOnly = sanitizeSearchString(meta.name);
+            console.log(`[SubsLand] No results with episode query, trying title only: "${titleOnly}"`);
+            const fallbackUrl = `${SEARCH_URL}?s=${encodeURIComponent(titleOnly)}&w=name&category=1`;
             try {
-                const broaderHtml = await fetchPage(broaderUrl);
-                parsePage(broaderHtml);
+                const fallbackHtml = await fetchPage(fallbackUrl);
+                parsePage(fallbackHtml);
             } catch (err) {
-                console.error('[SubsLand] Broader search failed:', err.message);
+                console.error('[SubsLand] Title-only search failed:', err.message);
             }
         }
 
