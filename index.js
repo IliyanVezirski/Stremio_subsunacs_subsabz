@@ -7,6 +7,7 @@ const { createExtractorFromData } = require('node-unrar-js');
 const iconv = require('iconv-lite');
 const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
+const subsland = require('./providers/subsland');
 
 // Define port and base URL
 const PORT = process.env.PORT || 8080;
@@ -20,6 +21,7 @@ function getProviderName(sub) {
     const source = sub.id.split('_')[0];
     if (source === 'subsunacs') return 'Subsunacs.net';
     if (source === 'subssab') return 'Subs.sab.bz';
+    if (source === 'subsland') return 'SubsLand.com';
     return source;
 }
 
@@ -33,9 +35,9 @@ function getProxyUrl(sub, season, episode) {
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.0.4', // Incremented version for bugfix
-    name: 'Subsunacs & Subs.sab.bz',
-    description: 'Търси български субтитри от Subsunacs.net и Subs.sab.bz с поддръжка на кеширане.',
+    version: '1.0.5',
+    name: 'Subsunacs & Subs.sab.bz & SubsLand',
+    description: 'Търси български субтитри от Subsunacs.net, Subs.sab.bz и SubsLand.com с поддръжка на кеширане.',
     logo: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
     resources: ['subtitles'],
     types: ['movie', 'series'],
@@ -70,7 +72,7 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
     }
 
     try {
-        const [subsunacsSubs, subsSabSubs] = await Promise.all([
+        const [subsunacsSubs, subsSabSubs, subslandSubs] = await Promise.all([
             subsunacs.search(imdbId, type, season, episode).catch(err => {
                 console.error('[Subsunacs Error]', err.message);
                 return [];
@@ -78,10 +80,14 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
             subsSab.search(imdbId, type, season, episode).catch(err => {
                 console.error('[Subs.sab.bz Error]', err.message);
                 return [];
+            }),
+            subsland.search(imdbId, type, season, episode).catch(err => {
+                console.error('[SubsLand Error]', err.message);
+                return [];
             })
         ]);
 
-        const rawSubtitles = [...subsunacsSubs, ...subsSabSubs];
+        const rawSubtitles = [...subsunacsSubs, ...subsSabSubs, ...subslandSubs];
         
         console.log(`[Result] Found ${rawSubtitles.length} subtitles for ${id}`);
 
@@ -125,6 +131,8 @@ app.get('/proxy', async (req, res) => {
             buffer = await subsunacs.download(url);
         } else if (source === 'subssab') {
             buffer = await subsSab.download(url);
+        } else if (source === 'subsland') {
+            buffer = await subsland.download(url);
         } else {
             const response = await axios.get(url, {
                 responseType: 'arraybuffer',
