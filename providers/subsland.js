@@ -27,6 +27,7 @@ const BROWSER_HEADERS = {
 };
 
 const JINA_PREFIX = 'https://r.jina.ai/';
+const CODETABS_PREFIX = 'https://api.codetabs.com/v1/proxy/?quest=';
 
 /**
  * Fetch an HTML page from SubsLand via Jina AI proxy (bypasses Cloudflare).
@@ -44,17 +45,33 @@ async function fetchPage(url) {
 }
 
 /**
- * Download a binary file from SubsLand (not behind Cloudflare).
+ * Download a binary file from SubsLand. Tries direct first, falls back to codetabs proxy.
  */
 async function fetchBinary(url, referer) {
-    const resp = await axios.get(url, {
+    // Try direct download first
+    try {
+        const resp = await axios.get(url, {
+            responseType: 'arraybuffer',
+            headers: {
+                ...BROWSER_HEADERS,
+                'Referer': referer || BASE_URL
+            },
+            timeout: 30000,
+            validateStatus: (status) => status < 400
+        });
+        console.log('[SubsLand] Direct download succeeded');
+        return Buffer.from(resp.data);
+    } catch (directErr) {
+        console.log(`[SubsLand] Direct download failed (${directErr.message}), trying proxy...`);
+    }
+
+    // Fallback: codetabs proxy for binary downloads
+    const proxyUrl = `${CODETABS_PREFIX}${encodeURIComponent(url)}`;
+    const resp = await axios.get(proxyUrl, {
         responseType: 'arraybuffer',
-        headers: {
-            ...BROWSER_HEADERS,
-            'Referer': referer || BASE_URL
-        },
         timeout: 30000
     });
+    console.log('[SubsLand] Proxy download succeeded');
     return Buffer.from(resp.data);
 }
 
