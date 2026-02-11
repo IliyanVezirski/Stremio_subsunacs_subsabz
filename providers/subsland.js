@@ -206,16 +206,11 @@ async function search(imdbId, type, season, episode) {
         const isSeries = type === 'series' && season && episode;
 
         let searchQuery = sanitizeSearchString(meta.name);
-        if (isSeries) {
-            const s = String(season).padStart(2, '0');
-            const e = String(episode).padStart(2, '0');
-            searchQuery = `${sanitizeSearchString(meta.name)} S${s}E${e}`;
-        }
 
         console.log(`[SubsLand] Searching for: "${searchQuery}" (target: ${meta.name}${isSeries ? ` S${String(season).padStart(2,'0')}E${String(episode).padStart(2,'0')}` : ''}, year=${year || 'unknown'})`);
 
         const subtitles = [];
-        const maxPagesLimit = 3;
+        const maxPagesLimit = 2;
 
         // Parse a page and collect subtitles using regex (cheerio breaks table structure with Jina HTML)
         const parsePage = (html) => {
@@ -223,6 +218,12 @@ async function search(imdbId, type, season, episode) {
             const marker = 'Търсенето на субтитри приключи';
             const markerIdx = html.indexOf(marker);
             const resultHtml = markerIdx > -1 ? html.substring(markerIdx) : html;
+
+            // If SubsLand says "not found", skip these results (they're just keyword matches)
+            if (resultHtml.includes('Не са открити')) {
+                console.log('[SubsLand] No exact matches found, skipping keyword-only results');
+                return 0;
+            }
 
             // Extract each <tr> block with regex
             const trRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
@@ -317,19 +318,6 @@ async function search(imdbId, type, season, episode) {
             } catch (err) {
                 console.error('[SubsLand] Page fetch error:', err.message);
                 break;
-            }
-        }
-
-        // Fallback for series: if no results with title+SxxExx, try with just title
-        if (isSeries && subtitles.length === 0) {
-            const titleOnly = sanitizeSearchString(meta.name);
-            console.log(`[SubsLand] No results with episode query, trying title only: "${titleOnly}"`);
-            const fallbackUrl = `${SEARCH_URL}?s=${encodeURIComponent(titleOnly)}&w=name&category=1`;
-            try {
-                const fallbackHtml = await fetchPage(fallbackUrl);
-                parsePage(fallbackHtml);
-            } catch (err) {
-                console.error('[SubsLand] Title-only search failed:', err.message);
             }
         }
 
