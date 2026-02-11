@@ -45,33 +45,14 @@ async function fetchPage(url) {
 }
 
 /**
- * Download a binary file from SubsLand. Tries direct first, falls back to codetabs proxy.
+ * Download a binary file from SubsLand via codetabs proxy (bypasses Cloudflare).
  */
-async function fetchBinary(url, referer) {
-    // Try direct download first
-    try {
-        const resp = await axios.get(url, {
-            responseType: 'arraybuffer',
-            headers: {
-                ...BROWSER_HEADERS,
-                'Referer': referer || BASE_URL
-            },
-            timeout: 30000,
-            validateStatus: (status) => status < 400
-        });
-        console.log('[SubsLand] Direct download succeeded');
-        return Buffer.from(resp.data);
-    } catch (directErr) {
-        console.log(`[SubsLand] Direct download failed (${directErr.message}), trying proxy...`);
-    }
-
-    // Fallback: codetabs proxy for binary downloads
+async function fetchBinary(url) {
     const proxyUrl = `${CODETABS_PREFIX}${encodeURIComponent(url)}`;
     const resp = await axios.get(proxyUrl, {
         responseType: 'arraybuffer',
         timeout: 30000
     });
-    console.log('[SubsLand] Proxy download succeeded');
     return Buffer.from(resp.data);
 }
 
