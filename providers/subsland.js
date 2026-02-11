@@ -9,6 +9,95 @@ const CINEMETA_URL = 'https://v3-cinemeta.strem.io/meta';
 const TMDB_API_KEY = 'b019b78bbd3a80f0f3112369c3b8c243';
 const TMDB_URL = 'https://api.themoviedb.org/3';
 
+// Browser-like headers to avoid Cloudflare 403 blocks
+const BROWSER_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'bg-BG,bg;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-User': '?1',
+    'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"'
+};
+
+// Session cookie cache
+let cachedCookies = null;
+let cookieTimestamp = 0;
+const COOKIE_TTL = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Get a valid session by visiting the homepage first to collect Cloudflare cookies.
+ * Caches cookies for reuse.
+ */
+async function getSessionCookies() {
+    if (cachedCookies && (Date.now() - cookieTimestamp < COOKIE_TTL)) {
+        return cachedCookies;
+    }
+
+    try {
+        console.log('[SubsLand] Refreshing session cookies...');
+        const resp = await axios.get(BASE_URL, {
+            headers: { ...BROWSER_HEADERS, 'Referer': 'https://www.google.com/' },
+            timeout: 15000,
+            maxRedirects: 5,
+            validateStatus: () => true // Accept any status to read cookies
+        });
+
+        const setCookieHeaders = resp.headers['set-cookie'] || [];
+        const cookies = setCookieHeaders.map(c => c.split(';')[0]).join('; ');
+        
+        if (cookies) {
+            cachedCookies = cookies;
+            cookieTimestamp = Date.now();
+            console.log(`[SubsLand] Got session cookies: ${cookies.substring(0, 80)}...`);
+        } else {
+            cachedCookies = '';
+            cookieTimestamp = Date.now();
+            console.log('[SubsLand] No cookies returned, proceeding without');
+        }
+
+        return cachedCookies;
+    } catch (e) {
+        console.error('[SubsLand] Cookie fetch error:', e.message);
+        return cachedCookies || '';
+    }
+}
+
+/**
+ * Make an HTTP GET request with session cookies and browser headers.
+ */
+async function sessionGet(url, extraHeaders = {}, opts = {}) {
+    const cookies = await getSessionCookies();
+    const headers = {
+        ...BROWSER_HEADERS,
+        ...extraHeaders,
+        'Referer': extraHeaders['Referer'] || BASE_URL
+    };
+    if (cookies) headers['Cookie'] = cookies;
+
+    const response = await axios.get(url, {
+        headers,
+        timeout: 15000,
+        maxRedirects: 5,
+        ...opts
+    });
+
+    // Update cookies if new ones are returned
+    const newCookies = response.headers['set-cookie'];
+    if (newCookies && newCookies.length) {
+        cachedCookies = newCookies.map(c => c.split(';')[0]).join('; ');
+        cookieTimestamp = Date.now();
+    }
+
+    return response;
+}
+
 /**
  * Normalize title for comparison - remove special chars, lowercase
  */
@@ -254,18 +343,23 @@ async function search(imdbId, type, season, episode) {
         const searchUrl = `${SEARCH_URL}?s=${encodeURIComponent(searchQuery)}&w=name&category=1`;
         let firstResponse;
         try {
-            firstResponse = await axios.get(searchUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'bg,en;q=0.9',
-                    'Referer': BASE_URL
-                },
-                timeout: 15000
-            });
+            firstResponse = await sessionGet(searchUrl);
         } catch (err) {
             console.error('[SubsLand] Search request failed:', err.message);
-            return [];
+            // On 403, invalidate cookies and retry once
+            if (err.response && err.response.status === 403) {
+                console.log('[SubsLand] Got 403, invalidating cookies and retrying...');
+                cachedCookies = null;
+                cookieTimestamp = 0;
+                try {
+                    firstResponse = await sessionGet(searchUrl);
+                } catch (err2) {
+                    console.error('[SubsLand] Retry also failed:', err2.message);
+                    return [];
+                }
+            } else {
+                return [];
+            }
         }
 
         const firstHtml = firstResponse.data;
@@ -276,14 +370,7 @@ async function search(imdbId, type, season, episode) {
             const pageUrl = `${SEARCH_URL}?s=${encodeURIComponent(searchQuery)}&w=name&category=1&page=${page}`;
             console.log(`[SubsLand] Fetching page ${page + 1}: ${pageUrl}`);
             try {
-                const resp = await axios.get(pageUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Accept-Language': 'bg,en;q=0.9',
-                        'Referer': BASE_URL
-                    },
-                    timeout: 15000
-                });
+                const resp = await sessionGet(pageUrl);
                 const maybeMax = parsePage(resp.data);
                 if (maybeMax > maxFoundPage) maxFoundPage = maybeMax;
             } catch (err) {
@@ -299,14 +386,7 @@ async function search(imdbId, type, season, episode) {
             console.log(`[SubsLand] No episode results, trying broader search: "${broaderQuery}"`);
             const broaderUrl = `${SEARCH_URL}?s=${encodeURIComponent(broaderQuery)}&w=name&category=1`;
             try {
-                const resp = await axios.get(broaderUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Accept-Language': 'bg,en;q=0.9',
-                        'Referer': BASE_URL
-                    },
-                    timeout: 15000
-                });
+                const resp = await sessionGet(broaderUrl);
                 parsePage(resp.data);
             } catch (err) {
                 console.error('[SubsLand] Broader search failed:', err.message);
@@ -341,12 +421,8 @@ async function download(downloadUrl) {
 
         // If the URL is a direct download link (/downloadsubtitles/), fetch it directly
         if (downloadUrl.includes('/downloadsubtitles/')) {
-            const response = await axios.get(downloadUrl, {
+            const response = await sessionGet(downloadUrl, {}, {
                 responseType: 'arraybuffer',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Referer': BASE_URL
-                },
                 timeout: 30000
             });
 
@@ -356,13 +432,7 @@ async function download(downloadUrl) {
 
         // Otherwise it's a detail page URL - scrape the download link from it
         console.log(`[SubsLand] Fetching detail page for download link: ${downloadUrl}`);
-        const detailResponse = await axios.get(downloadUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': BASE_URL
-            },
-            timeout: 15000
-        });
+        const detailResponse = await sessionGet(downloadUrl);
 
         const $ = cheerio.load(detailResponse.data);
         let dlUrl = null;
@@ -382,12 +452,8 @@ async function download(downloadUrl) {
         }
 
         console.log(`[SubsLand] Downloading: ${dlUrl}`);
-        const response = await axios.get(dlUrl, {
+        const response = await sessionGet(dlUrl, { 'Referer': downloadUrl }, {
             responseType: 'arraybuffer',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': downloadUrl
-            },
             timeout: 30000
         });
 
