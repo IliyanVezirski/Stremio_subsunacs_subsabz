@@ -35,9 +35,14 @@ function getProxyUrl(sub, season, episode) {
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.1.5',
+    version: '1.1.6',
     name: 'Bulgarian Subtitles',
-    description: 'Български субтитри.\n\n Подкрепети ни за да бъдем по-добри: https://bit.ly/support_addon',
+    // Изчистено описание с оправен правопис
+    description: 'Най-големите каталози за български субтитри на едно място.\n\n☕ Ако искате да подкрепите проекта, кликнете на бутона "Help".',
+    
+    // Този бутон винаги е кликаем в Stremio и ще отваря линка за дарения
+    helpUrl: 'https://bit.ly/support_addon',
+
     logo: 'https://cdn-icons-png.flaticon.com/512/16135/16135593.png',
     resources: ['subtitles'],
     types: ['movie', 'series'],
@@ -52,6 +57,8 @@ const manifest = {
       "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..i0matrKUZQpKi4hcK1BrXg.XTGwBN_5sUYxMwM-F6NMDbMMILdL_7-1eyYbH-YapR0y2HuLNp7R1rf6Pl5um7gShHzihR-kWG5tD96mzZgwsO0UUhvHYT0zRl-vERdTlTWkaXEojgAmNB75L0Vjj8nM.DoCZpYVobL1ZOQEZ-Zjxlg"
     }
 };
+
+// module.exports = manifest;
 
 const builder = new addonBuilder(manifest);
 
