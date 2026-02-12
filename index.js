@@ -37,7 +37,7 @@ const manifest = {
     id: 'com.stremio.bulgarian.subs',
     version: '1.1.5',
     name: 'Bulgarian Subtitles',
-    description: 'Български субтитри.',
+    description: 'Български субтитри.\n\n Подкрепети ни за да бъдем по-добри: https://bit.ly/support_addon',
     logo: 'https://cdn-icons-png.flaticon.com/512/16135/16135593.png',
     resources: ['subtitles'],
     types: ['movie', 'series'],
