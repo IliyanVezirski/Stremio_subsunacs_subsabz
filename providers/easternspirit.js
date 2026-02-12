@@ -31,13 +31,8 @@ function initClient() {
  * Login to Eastern Spirit forum
  */
 async function login() {
-    const username = process.env.ES_USERNAME;
-    const password = process.env.ES_PASSWORD;
-
-    if (!username || !password) {
-        console.log('[EasternSpirit] No credentials configured (ES_USERNAME / ES_PASSWORD)');
-        return false;
-    }
+    const username = process.env.ES_USERNAME || 'zamunda_is_great';
+    const password = process.env.ES_PASSWORD || '102088077';
 
     try {
         if (!client) initClient();
