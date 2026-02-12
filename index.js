@@ -51,7 +51,7 @@ const manifest = {
     catalogs: [],
     idPrefixes: ['tt'],
     behaviorHints: {
-        configurable: true, // Променете на true, за да се появи бутон "Configure"
+        configurable: false, // Променете на true, за да се появи бутон "Configure"
         configurationRequired: false
     },
     stremioAddonsConfig: {
