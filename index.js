@@ -37,7 +37,7 @@ const manifest = {
     id: 'com.stremio.bulgarian.subs',
     version: '1.1.6',
     name: 'Bulgarian Subtitles',
-    description: 'Най-големите каталози за български субтитри на едно място.\n\n☕ Подкрепете проекта: https://bit.ly/support_addon',
+    description: 'Най-големите каталози за български субтитри на едно място.',
     
     // Слагаме го тук, защото Stremio го показва като кликаем линк под описанието
     contactEmail: 'https://bit.ly/support_addon',
