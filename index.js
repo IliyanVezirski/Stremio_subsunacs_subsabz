@@ -8,6 +8,7 @@ const iconv = require('iconv-lite');
 const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 const subsland = require('./providers/subsland');
+const easternSpirit = require('./providers/easternspirit');
 
 // Define port and base URL
 const PORT = process.env.PORT || 8080;
@@ -22,6 +23,7 @@ function getProviderName(sub) {
     if (source === 'subsunacs') return 'Subsunacs.net';
     if (source === 'subssab') return 'Subs.sab.bz';
     if (source === 'subsland') return 'SubsLand.com';
+    if (source === 'easternspirit') return 'EasternSpirit.org';
     return source;
 }
 
@@ -94,7 +96,17 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
             })
         ]);
 
-        const rawSubtitles = [...subsunacsSubs, ...subsSabSubs, ...subslandSubs];
+        let rawSubtitles = [...subsunacsSubs, ...subsSabSubs, ...subslandSubs];
+
+        // EasternSpirit as fallback - only search if no subtitles found from other providers
+        if (rawSubtitles.length === 0) {
+            console.log('[EasternSpirit] No subs from other providers, trying EasternSpirit...');
+            const easternSpiritSubs = await easternSpirit.search(imdbId, type, season, episode).catch(err => {
+                console.error('[EasternSpirit Error]', err.message);
+                return [];
+            });
+            rawSubtitles = [...easternSpiritSubs];
+        }
         
         console.log(`[Result] Found ${rawSubtitles.length} subtitles for ${id}`);
 
@@ -140,6 +152,8 @@ app.get('/proxy', async (req, res) => {
             buffer = await subsSab.download(url);
         } else if (source === 'subsland') {
             buffer = await subsland.download(url);
+        } else if (source === 'easternspirit') {
+            buffer = await easternSpirit.download(url);
         } else {
             const response = await axios.get(url, {
                 responseType: 'arraybuffer',
