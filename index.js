@@ -37,10 +37,12 @@ const manifest = {
     id: 'com.stremio.bulgarian.subs',
     version: '1.1.6',
     name: 'Bulgarian Subtitles',
-    // Изчистено описание с оправен правопис
-    description: 'Най-големите каталози за български субтитри на едно място.\n\n☕ Ако искате да подкрепите проекта, кликнете на бутона "Help".',
+    description: 'Най-големите каталози за български субтитри на едно място.\n\n☕ Подкрепете проекта: https://bit.ly/support_addon',
     
-    // Този бутон винаги е кликаем в Stremio и ще отваря линка за дарения
+    // Слагаме го тук, защото Stremio го показва като кликаем линк под описанието
+    contactEmail: 'https://bit.ly/support_addon',
+
+    // Оставяме и това за всеки случай
     helpUrl: 'https://bit.ly/support_addon',
 
     logo: 'https://cdn-icons-png.flaticon.com/512/16135/16135593.png',
@@ -49,7 +51,7 @@ const manifest = {
     catalogs: [],
     idPrefixes: ['tt'],
     behaviorHints: {
-        configurable: false,
+        configurable: true, // Променете на true, за да се появи бутон "Configure"
         configurationRequired: false
     },
     stremioAddonsConfig: {
@@ -57,8 +59,6 @@ const manifest = {
       "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..i0matrKUZQpKi4hcK1BrXg.XTGwBN_5sUYxMwM-F6NMDbMMILdL_7-1eyYbH-YapR0y2HuLNp7R1rf6Pl5um7gShHzihR-kWG5tD96mzZgwsO0UUhvHYT0zRl-vERdTlTWkaXEojgAmNB75L0Vjj8nM.DoCZpYVobL1ZOQEZ-Zjxlg"
     }
 };
-
-// module.exports = manifest;
 
 const builder = new addonBuilder(manifest);
 
