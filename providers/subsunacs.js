@@ -47,9 +47,9 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
         
         // Common season/episode patterns
         const sePatterns = [
-            new RegExp(`s0*${sNum}e0*${eNum}`, 'i'),          // S03E01, S3E1
-            new RegExp(`${sNum}x0*${eNum}`, 'i'),              // 3x01, 03x01  
-            new RegExp(`season\\s*0*${sNum}.*episode\\s*0*${eNum}`, 'i'), // Season 3 Episode 1
+            new RegExp(`s0*${sNum}e0*${eNum}(?!\\d)`, 'i'),   // S03E01, S3E1 (not S3E10)
+            new RegExp(`${sNum}x0*${eNum}(?!\\d)`, 'i'),       // 3x01, 03x01 (not 3x10)  
+            new RegExp(`season\\s*0*${sNum}.*episode\\s*0*${eNum}(?!\\d)`, 'i'), // Season 3 Episode 1
             new RegExp(`\\b0*${sNum}x0*${eNum}\\b`, 'i'),      // 03x01 with word boundaries
         ];
         
