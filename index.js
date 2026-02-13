@@ -18,6 +18,16 @@ const BASE_URL = 'https://bulgarian-subs-addon.onrender.com';
 const CACHE_TTL = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 const cache = {};
 
+// Proxy cache — caches already-extracted subtitle content to avoid re-downloading
+const PROXY_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
+const proxyCache = {};
+// Request coalescing — prevents parallel downloads for the same subtitle
+const pendingDownloads = {};
+// Rate limiting — track recent requests per proxy cache key
+const proxyRateLimit = {};
+const RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
+const RATE_LIMIT_MAX = 3; // max 3 requests per URL per window
+
 function getProviderName(sub) {
     const source = sub.id.split('_')[0];
     if (source === 'subsunacs') return 'Subsunacs.net';
@@ -141,73 +151,141 @@ app.get('/proxy', async (req, res) => {
         return res.status(400).send('Missing URL parameter');
     }
 
+    // Build a unique cache key for this subtitle request
+    const cacheKey = `${source}|${url}|${season || ''}|${episode || ''}`;
+
+    // Serve from proxy cache if available
+    if (proxyCache[cacheKey] && (Date.now() - proxyCache[cacheKey].timestamp < PROXY_CACHE_TTL)) {
+        console.log(`[Proxy] CACHE HIT for ${url}`);
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.send(proxyCache[cacheKey].content);
+    }
+
+    // Rate limiting — block excessive requests for the same URL
+    const now = Date.now();
+    if (!proxyRateLimit[cacheKey]) {
+        proxyRateLimit[cacheKey] = [];
+    }
+    proxyRateLimit[cacheKey] = proxyRateLimit[cacheKey].filter(t => now - t < RATE_LIMIT_WINDOW);
+    if (proxyRateLimit[cacheKey].length >= RATE_LIMIT_MAX) {
+        console.log(`[Proxy] RATE LIMITED: ${url} (${proxyRateLimit[cacheKey].length} requests in last ${RATE_LIMIT_WINDOW / 1000}s)`);
+        return res.status(429).send('Too many requests for this subtitle. Try again later.');
+    }
+    proxyRateLimit[cacheKey].push(now);
+
     console.log(`[Proxy] Source: ${source}, URL: ${url}${season ? `, S${season}E${episode}` : ''}`);
 
-    try {
-        let buffer;
-        
-        if (source === 'subsunacs') {
-            buffer = await subsunacs.download(url);
-        } else if (source === 'subssab') {
-            buffer = await subsSab.download(url);
-        } else if (source === 'subsland') {
-            buffer = await subsland.download(url);
-        } else if (source === 'easternspirit') {
-            buffer = await easternSpirit.download(url);
-        } else {
-            const response = await axios.get(url, {
-                responseType: 'arraybuffer',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6',
-                    'Referer': url
-                },
-                timeout: 30000
-            });
-            buffer = Buffer.from(response.data);
-        }
-        
-        if (!buffer || buffer.length === 0) {
-            console.log('[Proxy] Empty response');
-            return res.status(404).send('Could not download subtitle');
-        }
-        
-        console.log(`[Proxy] Downloaded ${buffer.length} bytes`);
-        
-        const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
-        const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72; // Corrected RAR check
-        
-        const textStart = buffer.toString('utf8', 0, 100).toLowerCase();
-        if (textStart.includes('<!doctype') || textStart.includes('<html>') || textStart.includes('error')) {
-            console.log('[Proxy] Received HTML error page instead of archive');
-            console.log('[Proxy] Content:', buffer.toString('utf8', 0, 300));
-            return res.status(404).send('Download link returned error page');
-        }
-        
-        if (isZip) {
-            console.log('[Proxy] Detected ZIP file, extracting with adm-zip...');
-            return extractFromZip(buffer, res, season, episode);
-        } else if (isRar) {
-            console.log('[Proxy] Detected RAR file, extracting...');
-            return await extractFromRar(buffer, res, season, episode);
-        } else {
-            const text = buffer.toString('utf8').substring(0, 200);
-            if (text.includes('-->') || /^\d+\s*\n\d{2}:\d{2}/.test(text)) {
-                console.log('[Proxy] Detected SRT file directly');
-                let content = buffer.toString('utf8');
-                if (content.includes('\ufffd') || /[\x80-\x9F]/.test(content)) {
-                    content = iconv.decode(buffer, 'win1251');
-                }
+    // Request coalescing — if a download is already in-flight for this key, wait for it
+    if (pendingDownloads[cacheKey]) {
+        console.log(`[Proxy] Waiting for in-flight download: ${url}`);
+        try {
+            const content = await pendingDownloads[cacheKey];
+            if (content) {
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
+                res.setHeader('Cache-Control', 'public, max-age=86400');
                 return res.send(content);
             }
-            
-            console.log('[Proxy] Unknown format, first 100 chars:', text.substring(0, 100));
-            return res.status(415).send('Unknown subtitle format');
+            return res.status(404).send('Could not download subtitle');
+        } catch (error) {
+            console.error('[Proxy] Coalesced request error:', error.message);
+            return res.status(500).send(`Error downloading subtitle: ${error.message}`);
         }
-        
+    }
+
+    // Start a new download and register it for coalescing
+    const downloadPromise = (async () => {
+        try {
+            let buffer;
+            
+            if (source === 'subsunacs') {
+                buffer = await subsunacs.download(url);
+            } else if (source === 'subssab') {
+                buffer = await subsSab.download(url);
+            } else if (source === 'subsland') {
+                buffer = await subsland.download(url);
+            } else if (source === 'easternspirit') {
+                buffer = await easternSpirit.download(url);
+            } else {
+                const response = await axios.get(url, {
+                    responseType: 'arraybuffer',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6',
+                        'Referer': url
+                    },
+                    timeout: 30000
+                });
+                buffer = Buffer.from(response.data);
+            }
+            
+            if (!buffer || buffer.length === 0) {
+                console.log('[Proxy] Empty response');
+                return null;
+            }
+            
+            console.log(`[Proxy] Downloaded ${buffer.length} bytes`);
+            
+            const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
+            const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72;
+            
+            const textStart = buffer.toString('utf8', 0, 100).toLowerCase();
+            if (textStart.includes('<!doctype') || textStart.includes('<html>') || textStart.includes('error')) {
+                console.log('[Proxy] Received HTML error page instead of archive');
+                console.log('[Proxy] Content:', buffer.toString('utf8', 0, 300));
+                return null;
+            }
+            
+            let content = null;
+            if (isZip) {
+                console.log('[Proxy] Detected ZIP file, extracting with adm-zip...');
+                content = extractSubtitleFromZip(buffer, season, episode);
+            } else if (isRar) {
+                console.log('[Proxy] Detected RAR file, extracting...');
+                content = await extractSubtitleFromRar(buffer, season, episode);
+            } else {
+                const text = buffer.toString('utf8').substring(0, 200);
+                if (text.includes('-->') || /^\d+\s*\n\d{2}:\d{2}/.test(text)) {
+                    console.log('[Proxy] Detected SRT file directly');
+                    content = buffer.toString('utf8');
+                    if (content.includes('\ufffd') || /[\x80-\x9F]/.test(content)) {
+                        content = iconv.decode(buffer, 'win1251');
+                    }
+                } else {
+                    console.log('[Proxy] Unknown format, first 100 chars:', text.substring(0, 100));
+                    return null;
+                }
+            }
+
+            // Store in proxy cache
+            if (content) {
+                proxyCache[cacheKey] = { content, timestamp: Date.now() };
+                console.log(`[Proxy] Cached subtitle for: ${url}`);
+            }
+            return content;
+        } catch (error) {
+            console.error('[Proxy] Download/extract error:', error.message);
+            throw error;
+        }
+    })();
+
+    pendingDownloads[cacheKey] = downloadPromise;
+
+    try {
+        const content = await downloadPromise;
+        if (content) {
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.send(content);
+        }
+        return res.status(404).send('Could not download subtitle');
     } catch (error) {
         console.error('[Proxy] Error:', error.message);
-        res.status(500).send(`Error downloading subtitle: ${error.message}`);
+        return res.status(500).send(`Error downloading subtitle: ${error.message}`);
+    } finally {
+        delete pendingDownloads[cacheKey];
     }
 });
 
@@ -252,7 +330,8 @@ function findSubtitleForEpisode(files, season, episode) {
     return subFiles[0];
 }
 
-function extractFromZip(buffer, res, season = null, episode = null) {
+// Extract subtitle content from ZIP — returns string or null (no res dependency)
+function extractSubtitleFromZip(buffer, season = null, episode = null) {
     try {
         const zip = new AdmZip(buffer);
         const zipEntries = zip.getEntries();
@@ -260,12 +339,12 @@ function extractFromZip(buffer, res, season = null, episode = null) {
         
         if (!subFile) {
             console.log('[Proxy] No subtitle file found in ZIP');
-            return res.status(404).send('No subtitle file found in archive');
+            return null;
         }
 
         console.log(`[Proxy] Extracting from ZIP: ${subFile.entryName}`);
         const subBuffer = zip.readFile(subFile);
-        return sendSubtitleContent(subBuffer, res);
+        return decodeSubtitleBuffer(subBuffer);
         
     } catch (error) {
         console.error('[Proxy] ZIP extract error:', error.message);
@@ -273,7 +352,8 @@ function extractFromZip(buffer, res, season = null, episode = null) {
     }
 }
 
-async function extractFromRar(buffer, res, season = null, episode = null) {
+// Extract subtitle content from RAR — returns string or null (no res dependency)
+async function extractSubtitleFromRar(buffer, season = null, episode = null) {
     try {
         const extractor = await createExtractorFromData({ data: buffer });
         const list = extractor.getFileList();
@@ -283,7 +363,7 @@ async function extractFromRar(buffer, res, season = null, episode = null) {
         
         if (!subFileHeader) {
             console.log('[Proxy] No subtitle file found in RAR');
-            return res.status(404).send('No subtitle file found in archive');
+            return null;
         }
 
         console.log(`[Proxy] Extracting from RAR: ${subFileHeader.name}`);
@@ -293,11 +373,11 @@ async function extractFromRar(buffer, res, season = null, episode = null) {
         
         if (files.length === 0 || !files[0].extraction) {
             console.log('[Proxy] Failed to extract file from RAR');
-            return res.status(500).send('Failed to extract subtitle');
+            return null;
         }
         
         const subBuffer = Buffer.from(files[0].extraction);
-        return sendSubtitleContent(subBuffer, res);
+        return decodeSubtitleBuffer(subBuffer);
         
     } catch (error) {
         console.error('[Proxy] RAR extract error:', error.message);
@@ -305,7 +385,8 @@ async function extractFromRar(buffer, res, season = null, episode = null) {
     }
 }
 
-function sendSubtitleContent(subBuffer, res) {
+// Decode a subtitle buffer to UTF-8 string, falling back to win1251
+function decodeSubtitleBuffer(subBuffer) {
     let content;
     try {
         content = subBuffer.toString('utf8');
@@ -315,10 +396,7 @@ function sendSubtitleContent(subBuffer, res) {
     } catch (e) {
         content = iconv.decode(subBuffer, 'win1251');
     }
-    
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
-    return res.send(content);
+    return content;
 }
 
 app.get('/debug', async (req, res) => {
@@ -329,6 +407,11 @@ app.get('/debug', async (req, res) => {
             size: Object.keys(cache).length,
             ttl: CACHE_TTL
         },
+        proxyCache: {
+            size: Object.keys(proxyCache).length,
+            ttl: PROXY_CACHE_TTL
+        },
+        pendingDownloads: Object.keys(pendingDownloads).length,
         env: {
             PORT: process.env.PORT
         }
