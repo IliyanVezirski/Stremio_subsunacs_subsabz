@@ -26,7 +26,7 @@ const pendingDownloads = {};
 // Rate limiting — per-IP to block spammers before anything else
 const ipRateLimit = {};
 const IP_RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
-const IP_RATE_LIMIT_MAX = 2; // max 2 proxy requests per IP per window (strict)
+const IP_RATE_LIMIT_MAX = 20; // max 2 proxy requests per IP per window (strict)
 // Track cache hit counts per key (for log throttling)
 const cacheHitCount = {};
 
