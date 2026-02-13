@@ -26,9 +26,27 @@ const pendingDownloads = {};
 // Rate limiting — per-IP to block spammers before anything else
 const ipRateLimit = {};
 const IP_RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
-const IP_RATE_LIMIT_MAX = 10; // max 10 proxy requests per IP per window
+const IP_RATE_LIMIT_MAX = 2; // max 2 proxy requests per IP per window (strict)
 // Track cache hit counts per key (for log throttling)
 const cacheHitCount = {};
+
+// Hard blacklist for attacking IPs
+const BLACKLISTED_IPS = new Set([
+    '185.107.56.71',
+    '172.71.99.13',
+    '10.19.235.3'
+]);
+
+// Extract real client IP from x-forwarded-for header (first IP in comma-separated list)
+function getClientIp(req) {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) {
+        // x-forwarded-for can contain: "client, proxy1, proxy2"
+        const firstIp = xff.split(',')[0].trim();
+        return firstIp;
+    }
+    return req.socket.remoteAddress || 'unknown';
+}
 
 function getProviderName(sub) {
     const source = sub.id.split('_')[0];
@@ -153,8 +171,16 @@ app.get('/proxy', async (req, res) => {
         return res.status(400).send('Missing URL parameter');
     }
 
+    // Extract real client IP (first IP in x-forwarded-for chain)
+    const clientIp = getClientIp(req);
+    
+    // Hard blacklist check - block immediately
+    if (BLACKLISTED_IPS.has(clientIp)) {
+        console.log(`[Proxy] BLACKLISTED IP BLOCKED: ${clientIp} attempting ${url}`);
+        return res.status(403).send('Access denied.');
+    }
+
     // Per-IP rate limiting — applied BEFORE cache to block spammers completely
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     const now = Date.now();
     if (!ipRateLimit[clientIp]) {
         ipRateLimit[clientIp] = [];
