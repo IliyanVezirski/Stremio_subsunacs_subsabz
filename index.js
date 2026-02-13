@@ -23,10 +23,12 @@ const PROXY_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
 const proxyCache = {};
 // Request coalescing — prevents parallel downloads for the same subtitle
 const pendingDownloads = {};
-// Rate limiting — track recent requests per proxy cache key
-const proxyRateLimit = {};
-const RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
-const RATE_LIMIT_MAX = 3; // max 3 requests per URL per window
+// Rate limiting — per-IP to block spammers before anything else
+const ipRateLimit = {};
+const IP_RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
+const IP_RATE_LIMIT_MAX = 10; // max 10 proxy requests per IP per window
+// Track cache hit counts per key (for log throttling)
+const cacheHitCount = {};
 
 function getProviderName(sub) {
     const source = sub.id.split('_')[0];
@@ -151,29 +153,37 @@ app.get('/proxy', async (req, res) => {
         return res.status(400).send('Missing URL parameter');
     }
 
+    // Per-IP rate limiting — applied BEFORE cache to block spammers completely
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    if (!ipRateLimit[clientIp]) {
+        ipRateLimit[clientIp] = [];
+    }
+    ipRateLimit[clientIp] = ipRateLimit[clientIp].filter(t => now - t < IP_RATE_LIMIT_WINDOW);
+    if (ipRateLimit[clientIp].length >= IP_RATE_LIMIT_MAX) {
+        // Log only once per burst to avoid log spam
+        if (ipRateLimit[clientIp].length === IP_RATE_LIMIT_MAX) {
+            console.log(`[Proxy] RATE LIMITED IP ${clientIp}: ${url}`);
+        }
+        return res.status(429).send('Too many requests. Try again later.');
+    }
+    ipRateLimit[clientIp].push(now);
+
     // Build a unique cache key for this subtitle request
     const cacheKey = `${source}|${url}|${season || ''}|${episode || ''}`;
 
     // Serve from proxy cache if available
     if (proxyCache[cacheKey] && (Date.now() - proxyCache[cacheKey].timestamp < PROXY_CACHE_TTL)) {
-        console.log(`[Proxy] CACHE HIT for ${url}`);
+        // Throttled logging — log only every 50th cache hit to reduce noise
+        cacheHitCount[cacheKey] = (cacheHitCount[cacheKey] || 0) + 1;
+        if (cacheHitCount[cacheKey] === 1 || cacheHitCount[cacheKey] % 50 === 0) {
+            console.log(`[Proxy] CACHE HIT #${cacheHitCount[cacheKey]} for ${url}`);
+        }
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
         res.setHeader('Cache-Control', 'public, max-age=86400');
         return res.send(proxyCache[cacheKey].content);
     }
-
-    // Rate limiting — block excessive requests for the same URL
-    const now = Date.now();
-    if (!proxyRateLimit[cacheKey]) {
-        proxyRateLimit[cacheKey] = [];
-    }
-    proxyRateLimit[cacheKey] = proxyRateLimit[cacheKey].filter(t => now - t < RATE_LIMIT_WINDOW);
-    if (proxyRateLimit[cacheKey].length >= RATE_LIMIT_MAX) {
-        console.log(`[Proxy] RATE LIMITED: ${url} (${proxyRateLimit[cacheKey].length} requests in last ${RATE_LIMIT_WINDOW / 1000}s)`);
-        return res.status(429).send('Too many requests for this subtitle. Try again later.');
-    }
-    proxyRateLimit[cacheKey].push(now);
 
     console.log(`[Proxy] Source: ${source}, URL: ${url}${season ? `, S${season}E${episode}` : ''}`);
 
