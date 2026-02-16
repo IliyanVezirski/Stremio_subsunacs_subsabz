@@ -9,6 +9,7 @@ const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 const subsland = require('./providers/subsland');
 const easternSpirit = require('./providers/easternspirit');
+const openSubtitles = require('./providers/opensubtitles');
 
 // Define port and base URL
 const PORT = process.env.PORT || 8080;
@@ -54,6 +55,7 @@ function getProviderName(sub) {
     if (source === 'subssab') return 'Subs.sab.bz';
     if (source === 'subsland') return 'SubsLand.com';
     if (source === 'easternspirit') return 'EasternSpirit.org';
+    if (source === 'opensubtitles') return 'OpenSubtitles.org';
     return source;
 }
 
@@ -101,7 +103,12 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
 
     if (cache[id] && (Date.now() - cache[id].timestamp < CACHE_TTL)) {
         console.log(`[Cache] HIT for ${id}`);
-        const subtitles = cache[id].subtitles.map((sub, i) => ({ id: getProviderName(sub) + '_' + i, lang: 'bul', url: getProxyUrl(sub, season, episode) }));
+        const subtitles = cache[id].subtitles.map((sub, i) => ({ 
+            id: getProviderName(sub) + '_' + i, 
+            lang: 'bul', 
+            url: getProxyUrl(sub, season, episode),
+            name: sub.name
+        }));
         return { subtitles };
     }
     console.log(`[Cache] MISS for ${id}`);
@@ -111,9 +118,9 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
     }
 
     try {
-        const [subsunacsSubs, subsSabSubs, subslandSubs] = await Promise.all([
-            subsunacs.search(imdbId, type, season, episode).catch(err => {
-                console.error('[Subsunacs Error]', err.message);
+        const [openSubtitlesSubs, subsSabSubs, subslandSubs] = await Promise.all([
+            openSubtitles.search(imdbId, type, season, episode).catch(err => {
+                console.error('[OpenSubtitles Error]', err.message);
                 return [];
             }),
             subsSab.search(imdbId, type, season, episode).catch(err => {
@@ -126,7 +133,7 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
             })
         ]);
 
-        let rawSubtitles = [...subsunacsSubs, ...subsSabSubs, ...subslandSubs];
+        let rawSubtitles = [...openSubtitlesSubs, ...subsSabSubs, ...subslandSubs];
 
         // EasternSpirit as fallback - only search if no subtitles found from other providers
         if (rawSubtitles.length === 0) {
@@ -147,7 +154,12 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
         };
         console.log(`[Cache] STORED for ${id}`);
 
-        const proxiedSubtitles = rawSubtitles.map((sub, i) => ({ id: getProviderName(sub) + '_' + i, lang: 'bul', url: getProxyUrl(sub, season, episode) }));
+        const proxiedSubtitles = rawSubtitles.map((sub, i) => ({ 
+            id: getProviderName(sub) + '_' + i, 
+            lang: 'bul', 
+            url: getProxyUrl(sub, season, episode),
+            name: sub.name
+        }));
 
         return { subtitles: proxiedSubtitles };
     } catch (error) {
@@ -244,6 +256,8 @@ app.get('/proxy', async (req, res) => {
                 buffer = await subsland.download(url);
             } else if (source === 'easternspirit') {
                 buffer = await easternSpirit.download(url);
+            } else if (source === 'opensubtitles') {
+                buffer = await openSubtitles.download(url);
             } else {
                 const response = await axios.get(url, {
                     responseType: 'arraybuffer',
