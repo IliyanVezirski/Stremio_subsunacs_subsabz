@@ -400,7 +400,49 @@ async function download(downloadUrl) {
 }
 
 async function getMetadata(imdbId, type) {
-    // Prefer IMDb scraping first
+    // For TV series, try TMDB first (can get show name from episode ID)
+    if (type === 'series') {
+        try {
+            const url = `${TMDB_URL}/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`;
+            const response = await axios.get(url, {
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+                timeout: 10000
+            });
+
+            // Direct series match
+            if (response.data.tv_results && response.data.tv_results.length > 0) {
+                const item = response.data.tv_results[0];
+                const name = item.name;
+                const year = (item.first_air_date || '').substring(0, 4);
+                console.log(`[TMDB] Series found: ${name} (${year})`);
+                return { name, year };
+            }
+            
+            // Episode ID - need to get show name
+            if (response.data.tv_episode_results && response.data.tv_episode_results.length > 0) {
+                const episode = response.data.tv_episode_results[0];
+                const showId = episode.show_id;
+                console.log(`[TMDB] Episode found, show_id: ${showId}`);
+                
+                const showUrl = `${TMDB_URL}/tv/${showId}?api_key=${TMDB_API_KEY}`;
+                const showResp = await axios.get(showUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0' },
+                    timeout: 10000
+                });
+                
+                if (showResp.data && showResp.data.name) {
+                    const name = showResp.data.name;
+                    const year = (showResp.data.first_air_date || '').substring(0, 4);
+                    console.log(`[TMDB] Show from episode: ${name} (${year})`);
+                    return { name, year };
+                }
+            }
+        } catch (error) {
+            console.error('[TMDB] Error:', error.message);
+        }
+    }
+
+    // Try IMDb scraping
     try {
         const imdbMeta = await getImdbMetadata(imdbId);
         if (imdbMeta && imdbMeta.name) {
@@ -411,7 +453,7 @@ async function getMetadata(imdbId, type) {
         console.error('[Subs.sab.bz] IMDb fetch error:', e.message);
     }
 
-    // Try Cinemeta next
+    // Try Cinemeta
     try {
         const metaType = type === 'series' ? 'series' : 'movie';
         const url = `${CINEMETA_URL}/${metaType}/${imdbId}.json`;
@@ -431,27 +473,25 @@ async function getMetadata(imdbId, type) {
         console.error('[Cinemeta] Error:', error.message);
     }
     
-    // Fallback to TMDB
-    console.log('[Subs.sab.bz] Cinemeta failed, trying TMDB...');
-    try {
-        const tmdbType = type === 'series' ? 'tv' : 'movie';
-        const url = `${TMDB_URL}/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`;
+    // Fallback to TMDB for movies
+    if (type !== 'series') {
+        console.log('[Subs.sab.bz] Trying TMDB for movie...');
+        try {
+            const url = `${TMDB_URL}/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`;
+            const response = await axios.get(url, {
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+                timeout: 10000
+            });
 
-        const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000
-        });
-
-        const results = type === 'series' ? response.data.tv_results : response.data.movie_results;
-
-        if (results && results.length > 0) {
-            const item = results[0];
-            const name = item.title || item.name;
-            const year = (item.release_date || item.first_air_date || '').substring(0, 4);
-            return { name, year };
+            if (response.data.movie_results && response.data.movie_results.length > 0) {
+                const item = response.data.movie_results[0];
+                const name = item.title || item.name;
+                const year = (item.release_date || '').substring(0, 4);
+                return { name, year };
+            }
+        } catch (error) {
+            console.error('[TMDB] Error:', error.message);
         }
-    } catch (error) {
-        console.error('[TMDB] Error:', error.message);
     }
 
     return null;
