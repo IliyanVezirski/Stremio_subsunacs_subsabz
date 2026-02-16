@@ -28,6 +28,64 @@ const pendingDownloads = {};
 const ipRateLimit = {};
 const IP_RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
 const IP_RATE_LIMIT_MAX = 20; // max 2 proxy requests per IP per window (strict)
+
+function isValidUtf8(buffer) {
+    for (let i = 0; i < buffer.length; i++) {
+        const byte = buffer[i];
+        if (byte <= 0x7F) continue;
+        if (byte >= 0xC2 && byte <= 0xDF) {
+            if (i + 1 >= buffer.length || (buffer[i + 1] & 0xC0) !== 0x80) return false;
+            i++;
+        } else if (byte >= 0xE0 && byte <= 0xEF) {
+            if (i + 2 >= buffer.length) return false;
+            if ((buffer[i + 1] & 0xC0) !== 0x80 || (buffer[i + 2] & 0xC0) !== 0x80) return false;
+            if (byte === 0xE0 && buffer[i + 1] < 0xA0) return false;
+            if (byte === 0xED && buffer[i + 1] > 0x9F) return false;
+            i += 2;
+        } else if (byte >= 0xF0 && byte <= 0xF4) {
+            if (i + 3 >= buffer.length) return false;
+            if ((buffer[i + 1] & 0xC0) !== 0x80 || (buffer[i + 2] & 0xC0) !== 0x80 || (buffer[i + 3] & 0xC0) !== 0x80) return false;
+            if (byte === 0xF0 && buffer[i + 1] < 0x90) return false;
+            if (byte === 0xF4 && buffer[i + 1] > 0x8F) return false;
+            i += 3;
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+function hasWin1251Cyrillic(buffer) {
+    for (let i = 0; i < buffer.length; i++) {
+        const byte = buffer[i];
+        if ((byte >= 0xC0 && byte <= 0xFF) || byte === 0xA8 || byte === 0xB8 || byte === 0xA9 || byte === 0xB9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function detectEncoding(buffer) {
+    if (isValidUtf8(buffer)) {
+        const text = buffer.toString('utf8');
+        const cyrillicPattern = /[\u0400-\u04FF]/;
+        if (cyrillicPattern.test(text)) {
+            return 'utf8';
+        }
+    }
+    if (hasWin1251Cyrillic(buffer)) {
+        return 'win1251';
+    }
+    return 'utf8';
+}
+
+function decodeSubtitleBuffer(subBuffer) {
+    const encoding = detectEncoding(subBuffer);
+    if (encoding === 'win1251') {
+        return iconv.decode(subBuffer, 'win1251');
+    }
+    return subBuffer.toString('utf8');
+}
 // Track cache hit counts per key (for log throttling)
 const cacheHitCount = {};
 
@@ -298,10 +356,7 @@ app.get('/proxy', async (req, res) => {
                 const text = buffer.toString('utf8').substring(0, 200);
                 if (text.includes('-->') || /^\d+\s*\n\d{2}:\d{2}/.test(text)) {
                     console.log('[Proxy] Detected SRT file directly');
-                    content = buffer.toString('utf8');
-                    if (content.includes('\ufffd') || /[\x80-\x9F]/.test(content)) {
-                        content = iconv.decode(buffer, 'win1251');
-                    }
+                    content = decodeSubtitleBuffer(buffer);
                 } else {
                     console.log('[Proxy] Unknown format, first 100 chars:', text.substring(0, 100));
                     return null;
@@ -433,20 +488,6 @@ async function extractSubtitleFromRar(buffer, season = null, episode = null) {
         console.error('[Proxy] RAR extract error:', error.message);
         throw error;
     }
-}
-
-// Decode a subtitle buffer to UTF-8 string, falling back to win1251
-function decodeSubtitleBuffer(subBuffer) {
-    let content;
-    try {
-        content = subBuffer.toString('utf8');
-        if (content.includes('\ufffd') || /[\x80-\x9F]/.test(content)) {
-            content = iconv.decode(subBuffer, 'win1251');
-        }
-    } catch (e) {
-        content = iconv.decode(subBuffer, 'win1251');
-    }
-    return content;
 }
 
 app.get('/debug', async (req, res) => {
