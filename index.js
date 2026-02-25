@@ -176,7 +176,7 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
     }
 
     try {
-        const [openSubtitlesSubs, subsSabSubs, subslandSubs] = await Promise.all([
+        const [openSubtitlesSubs, subsSabSubs, subslandSubs, subsunacsSubs] = await Promise.all([
             openSubtitles.search(imdbId, type, season, episode).catch(err => {
                 console.error('[OpenSubtitles Error]', err.message);
                 return [];
@@ -188,10 +188,14 @@ builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
             subsland.search(imdbId, type, season, episode).catch(err => {
                 console.error('[SubsLand Error]', err.message);
                 return [];
+            }),
+            subsunacs.search(imdbId, type, season, episode).catch(err => {
+                console.error('[Subsunacs Error]', err.message);
+                return [];
             })
         ]);
 
-        let rawSubtitles = [...openSubtitlesSubs, ...subsSabSubs, ...subslandSubs];
+        let rawSubtitles = [...openSubtitlesSubs, ...subsSabSubs, ...subslandSubs, ...subsunacsSubs];
 
         // EasternSpirit as fallback - only search if no subtitles found from other providers
         if (rawSubtitles.length === 0) {
