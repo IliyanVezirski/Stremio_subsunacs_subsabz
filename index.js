@@ -132,10 +132,10 @@ const manifest = {
     description: 'Най-големите каталози за български субтитри на едно място.',
     
     // Слагаме го тук, защото Stremio го показва като кликаем линк под описанието
-    contactEmail: 'https://bit.ly/support_addon',
+    contactEmail: 'https://revolut.me/iliyantyb2',
 
     // Оставяме и това за всеки случай
-    helpUrl: 'https://bit.ly/support_addon',
+    helpUrl: 'https://revolut.me/iliyantyb2',
 
     logo: 'https://cdn-icons-png.flaticon.com/512/16135/16135593.png',
     resources: ['subtitles'],
