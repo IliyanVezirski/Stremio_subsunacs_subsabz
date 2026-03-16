@@ -127,12 +127,12 @@ function getProxyUrl(sub, season, episode) {
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.1.6',
+    version: '1.1.7',
     name: 'Bulgarian Subtitles',
-    description: 'Най-големите каталози за български субтитри на едно място.',
+    description: 'Bg subs - Бг субтитри от 5 от най популярните сайтове за субтитри в България.',
     
     // Слагаме го тук, защото Stremio го показва като кликаем линк под описанието
-    contactEmail: 'https://revolut.me/iliyantyb2',
+    contactEmail: 'Ilian.vezirski@gmail.com',
 
     // Оставяме и това за всеки случай
     helpUrl: 'https://revolut.me/iliyantyb2',
