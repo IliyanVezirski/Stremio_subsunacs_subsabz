@@ -36,7 +36,7 @@
     let s2 = [];
     try {
         console.log('\n--- subsunacs.search ---');
-        s1 = await subsunacs.search(imdbId, type);
+        s1 = await subsunacs.search(imdbId, type, seasonArg, episodeArg);
         console.log('subsunacs returned count =', Array.isArray(s1) ? s1.length : 'non-array', '\n', s1);
     } catch (e) {
         console.error('subsunacs.search threw:', e && e.stack ? e.stack : e);
@@ -44,7 +44,7 @@
 
     try {
         console.log('\n--- subssab.search ---');
-        s2 = await subsSab.search(imdbId, type);
+        s2 = await subsSab.search(imdbId, type, seasonArg, episodeArg);
         console.log('subssab returned count =', Array.isArray(s2) ? s2.length : 'non-array', '\n', s2);
     } catch (e) {
         console.error('subssab.search threw:', e && e.stack ? e.stack : e);

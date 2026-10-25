@@ -1,3 +1,7 @@
+const { normalizeTitle, queryVariants, rowMetadata, movieMatch, yearsMatch } = require('../lib/titles');
+const { getMetadata } = require('../lib/metadata');
+const { matchesEpisode, matchesSeasonPack, matchIdentifiedSeries } = require('../lib/episodes');
+const { releaseMetadata } = require('../lib/releases');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const iconv = require('iconv-lite');
@@ -12,13 +16,7 @@ const TMDB_URL = 'https://api.themoviedb.org/3';
 /**
  * Normalize title for comparison - remove special chars, lowercase
  */
-function normalizeTitle(title) {
-    return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\u0400-\u04FF\s]/gi, ' ') // Keep letters, numbers, cyrillic
-        .replace(/\s+/g, ' ')
-        .trim();
-}
+
 
 // Sanitize a string for search queries: remove punctuation like :,-. and collapse spaces
 function sanitizeSearchString(s) {
@@ -40,41 +38,21 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
     
     // For TV series - check season/episode match
     if (season !== null && episode !== null) {
+        if (normalizedSub !== normalizedTitle && !normalizedSub.startsWith(normalizedTitle + ' ')) return { match: false, score: 0 };
         const s = String(season).padStart(2, '0');
         const e = String(episode).padStart(2, '0');
-        const sNum = parseInt(season);
-        const eNum = parseInt(episode);
         
-        // Common season/episode patterns
-        const sePatterns = [
-            new RegExp(`s0*${sNum}e0*${eNum}(?!\\d)`, 'i'),   // S03E01, S3E1 (not S3E10)
-            new RegExp(`${sNum}x0*${eNum}(?!\\d)`, 'i'),       // 3x01, 03x01 (not 3x10)  
-            new RegExp(`season\\s*0*${sNum}.*episode\\s*0*${eNum}(?!\\d)`, 'i'), // Season 3 Episode 1
-            new RegExp(`\\b0*${sNum}x0*${eNum}\\b`, 'i'),      // 03x01 with word boundaries
-        ];
-        
-        // Season pack patterns (full season without specific episode)
-        const seasonPackPatterns = [
-            new RegExp(`s0*${sNum}\\b(?!e)`, 'i'),             // S03 but not S03E
-            new RegExp(`\\bseason\\s*0*${sNum}\\b`, 'i'),     // Season 3
-            new RegExp(`\\bs0*${sNum}[\\s\\.-]*(complete|full|all)`, 'i'), // S03 Complete
-            new RegExp(`(complete|full).*s0*${sNum}\\b`, 'i'), // Complete S03
-            new RegExp(`\\b0*${sNum}\\b[\\s\\-]*(complete|full|all|season)`, 'i'), // 04 - Complete Season
-            new RegExp(`(complete|full|season)[\\s\\-]*0*${sNum}\\b`, 'i'), // Complete Season 04
-        ];
-        
-        const hasSeasonEpisode = sePatterns.some(pattern => pattern.test(subName));
-        const isSeasonPack = seasonPackPatterns.some(pattern => pattern.test(subName)) && 
-                             !hasSeasonEpisode; // Only if NOT a specific episode
-        
+        const hasSeasonEpisode = matchesEpisode(subName, season, episode);
+        const isSeasonPack = matchesSeasonPack(subName, season);
+
         if (!hasSeasonEpisode && !isSeasonPack) {
-            console.log(`[Filter] Series subtitle "${subName}" doesn't match S${s}E${e} or season pack`);
+            if (process.env.DEBUG_SEARCH) console.log(`[Filter] Series subtitle "${subName}" doesn't match S${s}E${e} or season pack`);
             return { match: false, score: 0 };
         }
         
         // Season packs get slightly lower score than exact episode matches
         if (isSeasonPack) {
-            console.log(`[Filter] "${subName}" is a season pack for S${s}`);
+            if (process.env.DEBUG_SEARCH) console.log(`[Filter] "${subName}" is a season pack for S${s}`);
         }
         
         // Check that title words are in subtitle (less strict for series)
@@ -82,7 +60,7 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
         const minMatches = Math.max(1, Math.ceil(titleWords.length * 0.6));
         
         if (matchScore < minMatches) {
-            console.log(`[Filter] Series subtitle "${subName}" doesn't match title "${movieTitle}"`);
+            if (process.env.DEBUG_SEARCH) console.log(`[Filter] Series subtitle "${subName}" doesn't match title "${movieTitle}"`);
             return { match: false, score: 0 };
         }
         
@@ -90,70 +68,14 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
         return { match: true, score: matchScore + (isSeasonPack ? 5 : 10), isSeasonPack };
     }
     
-    // For movies - check year match
-    if (movieYear) {
-        const yearMatch = subName.match(/(19|20)\d{2}/);
-        if (yearMatch && yearMatch[0] !== movieYear) {
-            return { match: false, score: 0 };
-        }
-    }
-    
-    // For short titles (1-2 words), be VERY strict but handle numbered sequels
-    if (titleWords.length <= 2) {
-        // Title must be at the beginning
-        const startsWithTitle = titleWords.every((word, i) => subWords[i] === word);
-        if (!startsWithTitle) {
-            return { match: false, score: 0 };
-        }
-        
-        // Check what comes AFTER the title
-        const nextWordIndex = titleWords.length;
-        if (subWords[nextWordIndex]) {
-            const nextWord = subWords[nextWordIndex];
-            // Next word should be: year, release term, "aka", or number (for sequels like "Zootopia 2")
-            const isYear = /^(19|20)\d{2}$/.test(nextWord);
-            const isReleaseTerm = /^(720p|1080p|2160p|4k|bluray|bdrip|brrip|hdrip|webrip|web|dvdrip|hdtv|proper|repack|extended|unrated|directors|x264|x265|h264|h265|aac|dts|ac3|remux|uhd)$/i.test(nextWord);
-            const isAka = nextWord === 'aka' || nextWord === 'a';
-            const isNumber = /^\d+$/.test(nextWord); // Allow numbers (sequel numbers, part numbers)
-            const isEpisodePattern = /^\d{1,2}x\d{1,2}$/i.test(nextWord) || /^s\d{1,2}e\d{1,2}$/i.test(nextWord) || /^\d{1,2}x\d{1,2}$/i.test(nextWord);
-            const isSeasonToken = /^season$/i.test(nextWord) || /^s\d{1,2}$/i.test(nextWord);
-
-            if (!isYear && !isReleaseTerm && !isAka && !isNumber && !isEpisodePattern && !isSeasonToken) {
-                // Next word is probably part of a different movie title
-                console.log(`[Filter] "${nextWord}" after "${normalizedTitle}" looks like different movie`);
-                return { match: false, score: 0 };
-            }
-        }
-    }
-    
-    // Calculate match score
-    const matchScore = titleWords.filter(word => normalizedSub.includes(word)).length;
-    const minMatches = Math.max(1, Math.ceil(titleWords.length * 0.5));
-
-    if (matchScore >= minMatches) {
-        return { match: true, score: matchScore };
-    }
-
-    // Fallback: fuzzy matching (Levenshtein + token overlap)
-    try {
-        const fm = fuzzyMatch(subName, movieTitle);
-        if (fm.match) {
-            console.log(`[Fuzzy] Accepted by fuzzy: lev=${fm.lev.toFixed(2)} overlap=${fm.overlap.toFixed(2)} score=${fm.score.toFixed(2)}`);
-            // Scale fuzzy score to similar scale (0..10)
-            return { match: true, score: Math.round(fm.score * 10) };
-        }
-    } catch (e) {
-        console.error('[Fuzzy] Error:', e.message);
-    }
-
-    return { match: false, score: matchScore };
+    return movieMatch(subName, movieTitle, movieYear);
 }
 
 /**
  * Search for subtitles on Subsunacs.net
  * Based on kgkolev/service.subtitles.subsunacs Kodi addon
  */
-async function search(imdbId, type, season, episode) {
+async function searchQuery(imdbId, type, season, episode, query) {
     try {
         const meta = await getMetadata(imdbId, type);
         if (!meta || !meta.name) {
@@ -170,12 +92,14 @@ async function search(imdbId, type, season, episode) {
             const s = String(season).padStart(2, '0');
             searchQuery = `${sanitizeSearchString(meta.name)} ${s}`;
         }
+        if (query) searchQuery = query;
         
         console.log(`[Subsunacs] Searching for: "${searchQuery}" (target: ${meta.name}${isSeries ? ` S${String(season).padStart(2,'0')}E${String(episode).padStart(2,'0')}` : ''}, year=${year || 'unknown'})`);
 
         // We'll request the first page via POST and then detect pagination and iterate further pages
         const searchParams = new URLSearchParams({
             m: searchQuery,
+            imdbcheck: '1',
             l: '0',
             c: '',
             // Do not include year in the search query — we'll filter by the page-provided year later
@@ -188,8 +112,7 @@ async function search(imdbId, type, season, episode) {
         });
 
         const subtitles = [];
-        const deferred = [];
-        const maxPagesLimit = 50;
+        const maxPagesLimit = 8;
 
         // Fetch first page (POST)
         let firstResponse;
@@ -228,13 +151,20 @@ async function search(imdbId, type, season, episode) {
                 } catch (e) {}
 
                 // If page provides a year and it doesn't match movie year, skip this subtitle
-                if (!isSeries && subtitleYear && year && String(subtitleYear) !== String(year)) {
+                if (!isSeries && subtitleYear && year && !yearsMatch(subtitleYear, year)) {
                     return;
                 }
 
-                const matchResult = isSeries
+                let matchResult = isSeries
                     ? isGoodMatch(name, meta.name, null, season, episode)
                     : isGoodMatch(name, meta.name, year);
+                // The site's tooltip poster filename is the numeric IMDb ID (sometimes zero-padded).
+                const posterId = ($link.attr('title') || '').match(/ii\/big(?:200)?\/(\d+)\.(?:jpg|png)/i)?.[1];
+                if (posterId && Number(posterId) === Number(imdbId.slice(2))) matchResult = isSeries ? matchIdentifiedSeries(name, season, episode) : { match: true, score: 20 };
+                if (!isSeries && !matchResult.match && subtitleYear) {
+                    const aliases = $link.siblings('span.smGray').map((_, el) => $(el).text().trim()).get();
+                    if (aliases.some(alias => movieMatch(alias, meta.name, year).match)) matchResult = { match: true, score: 10 };
+                }
                 if (!matchResult.match) return;
 
                 const matchScore = matchResult.score;
@@ -247,41 +177,16 @@ async function search(imdbId, type, season, episode) {
                 const idMatch = href.match(/-(\d+)\/?$/) || href.match(/id=(\d+)/);
                 const subId = idMatch ? idMatch[1] : (href + Math.random()).toString();
 
-                // If this is a season pack and user requested a specific episode,
-                // try to find episode-specific links on the detail page first,
-                // but fall back to including the season pack itself (the proxy will extract the right episode from the archive)
-                if (isSeries && matchResult.isSeasonPack && season && episode) {
-                    const packHref = href;
-                    const packSubId = subId;
-                    const packScore = matchScore;
-                    deferred.push(
-                        fetchEpisodeSubtitlesFromSeasonPack(packHref, season, episode).then((episodeSubs) => {
-                            if (episodeSubs && episodeSubs.length) {
-                                for (const es of episodeSubs) {
-                                    subtitles.push({ id: `subsunacs_${es.id || packSubId}`, lang: 'bul', url: es.url, score: packScore + 5 });
-                                    console.log(`[Subsunacs] Episode found inside season pack: id=${es.id || packSubId} name="${es.name}" href=${es.url}`);
-                                }
-                            } else {
-                                // No episode-specific links found — include the season pack itself;
-                                // the proxy will download the archive and extract the correct episode file
-                                subtitles.push({ id: `subsunacs_${packSubId}`, lang: 'bul', url: packHref, score: packScore });
-                                console.log(`[Subsunacs] Season pack included (archive extraction): id=${packSubId} name="${name}" href=${packHref}`);
-                            }
-                        }).catch((e) => {
-                            console.error('[Subsunacs] Error fetching season pack details:', e && e.message ? e.message : e);
-                            // On error, still include the season pack as fallback
-                            subtitles.push({ id: `subsunacs_${packSubId}`, lang: 'bul', url: packHref, score: packScore });
-                            console.log(`[Subsunacs] Season pack included after error: id=${packSubId} href=${packHref}`);
-                        })
-                    );
-                    return;
-                }
-
+                const release = releaseMetadata(cheerio.load($link.attr('title') || '').text());
                 subtitles.push({
                     id: `subsunacs_${subId}`,
+                    name,
                     lang: 'bul',
                     url: href,
-                    score: matchScore
+                    score: matchScore,
+                    quality: release.quality,
+                    fps: release.fps,
+                    formats: release.formats
                 });
                 console.log(`[Subsunacs] Match found: id=${subId} name="${name}" year=${subtitleYear || '?'} score=${matchScore} href=${href}`);
             });
@@ -303,58 +208,13 @@ async function search(imdbId, type, season, episode) {
             return maxPage;
         };
 
-            // Fetch details page of a season pack and search for episode-specific subtitle links
-            function fetchEpisodeSubtitlesFromSeasonPack(detailUrl, season, episode) {
-                return (async () => {
-                    try {
-                        const resp = await axios.get(detailUrl, {
-                            responseType: 'arraybuffer',
-                            headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': BASE_URL },
-                            timeout: 15000
-                        });
-                        const html = iconv.decode(Buffer.from(resp.data), 'win1251');
-                        const $d = cheerio.load(html);
-
-                        const candidates = [];
-                        const s = String(season).padStart(2, '0');
-                        const e = String(episode).padStart(2, '0');
-                        const patterns = [
-                            new RegExp(`s0*${parseInt(season)}e0*${parseInt(episode)}`, 'i'),
-                            new RegExp(`${parseInt(season)}x0*${parseInt(episode)}`, 'i'),
-                            new RegExp(`\\b${s}x${e}\\b`, 'i'),
-                            new RegExp(`\\b${parseInt(episode)}\\b`)
-                        ];
-
-                        $d('a').each((i, el) => {
-                            const text = $d(el).text().trim();
-                            const href2 = $d(el).attr('href');
-                            if (!href2) return;
-                            for (const pat of patterns) {
-                                if (pat.test(text) || pat.test(href2)) {
-                                    let full = href2;
-                                    if (!full.startsWith('http')) full = `${BASE_URL}/${full.replace(/^\//, '')}`;
-                                    const idm = full.match(/-(\d+)\/?$/) || full.match(/id=(\d+)/);
-                                    const idv = idm ? idm[1] : null;
-                                    candidates.push({ id: idv, url: full, name: text || '' });
-                                    break;
-                                }
-                            }
-                        });
-
-                        return candidates;
-                    } catch (e) {
-                        return [];
-                    }
-                })();
-            }
-
         // Parse first page
         const firstHtml = iconv.decode(Buffer.from(firstResponse.data), 'win1251');
         let maxFoundPage = parsePage(firstHtml);
 
         // If multiple pages, iterate pages via GET using the p= parameter format that subsunacs uses
-        for (let page = 2; page <= Math.min(maxFoundPage, maxPagesLimit); page++) {
-            const pageUrl = `${SEARCH_URL}?t=1&m=${encodeURIComponent(searchQuery)}&y=0&u=&c=&l=0&a=&d=&g=&o=0&s=0&memid=0&p=${page}`;
+        for (let page = 2; page <= Math.min(maxFoundPage, maxPagesLimit) && !(isSeries && subtitles.length); page++) {
+            const pageUrl = `${SEARCH_URL}?t=1&m=${encodeURIComponent(searchQuery)}&imdbcheck=1&y=0&u=&c=&l=0&a=&d=&g=&o=0&s=0&memid=0&p=${page}`;
             console.log(`[Subsunacs] Fetching page ${page}: ${pageUrl}`);
             try {
                 const resp = await axios.get(pageUrl, {
@@ -371,18 +231,13 @@ async function search(imdbId, type, season, episode) {
             }
         }
 
-        // Wait for any deferred detail-page fetches (season-pack inspections)
-        try {
-            await Promise.all(deferred);
-        } catch (e) {}
-
         // Deduplicate by id keeping highest score
         const dedup = {};
         for (const s of subtitles) {
             if (!dedup[s.id] || s.score > dedup[s.id].score) dedup[s.id] = s;
         }
         const results = Object.values(dedup);
-        results.sort((a, b) => b.score - a.score);
+        results.sort((a, b) => b.score - a.score || b.quality - a.quality || Number(b.id.split('_').pop()) - Number(a.id.split('_').pop()));
 
         console.log(`[Subsunacs] Found ${results.length} subtitles across pages`);
         return results;
@@ -391,6 +246,18 @@ async function search(imdbId, type, season, episode) {
         console.error('[Subsunacs] Search error:', error.message);
         return [];
     }
+}
+
+async function search(imdbId, type, season, episode) {
+    const meta = await getMetadata(imdbId, type);
+    if (!meta) return [];
+    const titles = queryVariants(meta.name);
+    const queries = type === 'series' ? [`${titles[0]} ${String(season).padStart(2, '0')}`, ...titles] : titles;
+    for (const query of [...new Set(queries)]) {
+        const result = await searchQuery(imdbId, type, season, episode, query);
+        if (result.length) return result;
+    }
+    return [];
 }
 
 /**
@@ -450,6 +317,10 @@ async function download(pageUrl) {
         }
         
         console.log(`[Subsunacs] Downloading: ${downloadUrl}`);
+        const target = new URL(downloadUrl);
+        if (!['subsunacs.net', 'www.subsunacs.net'].includes(target.hostname) || !['http:', 'https:'].includes(target.protocol) || target.username || target.password || target.port) {
+            throw new Error('Invalid Subsunacs download target');
+        }
         
         // Download with Referer header (important!)
         const response = await axios.get(downloadUrl, {
@@ -465,7 +336,7 @@ async function download(pageUrl) {
         
     } catch (error) {
         console.error('[Subsunacs] Download error:', error.message);
-        return null;
+        throw error;
     }
 }
 
@@ -554,65 +425,7 @@ async function getImdbMetadata(imdbId) {
     }
 }
 
-async function getMetadata(imdbId, type) {
-    // Prefer IMDb scraping first
-    try {
-        const imdbMeta = await getImdbMetadata(imdbId);
-        if (imdbMeta && imdbMeta.name) {
-            console.log(`[CINEMETA-FALLBACK] Using IMDb metadata: ${imdbMeta.name} (${imdbMeta.year || 'unknown'})`);
-            return imdbMeta;
-        }
-    } catch (e) {
-        console.error('[Metadata] IMDb fetch error:', e.message);
-    }
 
-    // Try Cinemeta next
-    try {
-        const metaType = type === 'series' ? 'series' : 'movie';
-        const url = `${CINEMETA_URL}/${metaType}/${imdbId}.json`;
-        
-        const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000
-        });
-
-        if (response.data && response.data.meta && response.data.meta.name) {
-            console.log(`[Cinemeta] Found: ${response.data.meta.name}`);
-            return {
-                name: response.data.meta.name,
-                year: response.data.meta.year || response.data.meta.releaseInfo
-            };
-        }
-    } catch (error) {
-        console.error('[Cinemeta] Error:', error.message);
-    }
-    
-    // Fallback to TMDB
-    try {
-        const tmdbType = type === 'series' ? 'tv' : 'movie';
-        const url = `${TMDB_URL}/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`;
-        
-        const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000
-        });
-
-        const results = type === 'series' ? response.data.tv_results : response.data.movie_results;
-        
-        if (results && results.length > 0) {
-            const item = results[0];
-            const name = item.title || item.name;
-            const year = (item.release_date || item.first_air_date || '').substring(0, 4);
-            console.log(`[TMDB] Found: ${name} (${year})`);
-            return { name, year };
-        }
-    } catch (error) {
-        console.error('[TMDB] Error:', error.message);
-    }
-    
-    console.log('[Metadata] No metadata found for:', imdbId);
-    return null;
-}
 
 /**
  * Detect whether an IMDb id refers to a movie or a series.

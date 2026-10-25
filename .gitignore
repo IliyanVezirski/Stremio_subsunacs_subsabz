@@ -6,3 +6,8 @@ node_modules/
 # ignore temporary downloaded and saved files
 tmp/
 tmp_*.html
+
+# Intermediate local runs; the completed 100-title report is versioned.
+reports/*.partial.json
+reports/validation-recheck.json
+reports/validation-before-resume.json

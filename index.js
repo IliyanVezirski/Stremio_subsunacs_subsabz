@@ -1,93 +1,39 @@
 
 const { addonBuilder, getRouter } = require('stremio-addon-sdk');
 const express = require('express');
-const axios = require('axios');
-const AdmZip = require('adm-zip');
-const { createExtractorFromData } = require('node-unrar-js');
-const iconv = require('iconv-lite');
+const { AbuseGuard, normalizeIp } = require('./lib/abuse');
+const abuse = new AbuseGuard();
+const { BoundedCache } = require('./lib/cache');
+const { withDeadline, getSourceDiagnostics } = require('./lib/requests');
 const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 const subsland = require('./providers/subsland');
 const easternSpirit = require('./providers/easternspirit');
-const openSubtitles = require('./providers/opensubtitles');
+const subsource = require('./providers/subsource');
+const { extractSubtitle, findSubtitleForEpisode, decodeSubtitleBuffer, extractSubtitleFromZip, extractSubtitleFromRar } = require('./lib/archive');
 
 // Define port and base URL
 const PORT = process.env.PORT || 8080;
-const BASE_URL = 'https://bulgarian-subs-addon.onrender.com';
+const BASE_URL = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 
 // Cache configuration
-const CACHE_TTL = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
-const cache = {};
+const CACHE_TTL = 5 * 60 * 1000; // Search results: five minutes
+const cache = new BoundedCache(1000, 8 * 1024 * 1024);
+const pendingSearches = new Map();
 
 // Proxy cache — caches already-extracted subtitle content to avoid re-downloading
 const PROXY_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
-const proxyCache = {};
+const proxyCache = new BoundedCache(200, 32 * 1024 * 1024);
 // Request coalescing — prevents parallel downloads for the same subtitle
-const pendingDownloads = {};
+const pendingDownloads = Object.create(null);
 // Rate limiting — per-IP to block spammers before anything else
-const ipRateLimit = {};
-const IP_RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
-const IP_RATE_LIMIT_MAX = 10; // max 10 proxy requests per IP per window (strict)
+const failedDownloads = new BoundedCache(500, 128 * 1024);
 
-function isValidUtf8(buffer) {
-    for (let i = 0; i < buffer.length; i++) {
-        const byte = buffer[i];
-        if (byte <= 0x7F) continue;
-        if (byte >= 0xC2 && byte <= 0xDF) {
-            if (i + 1 >= buffer.length || (buffer[i + 1] & 0xC0) !== 0x80) return false;
-            i++;
-        } else if (byte >= 0xE0 && byte <= 0xEF) {
-            if (i + 2 >= buffer.length) return false;
-            if ((buffer[i + 1] & 0xC0) !== 0x80 || (buffer[i + 2] & 0xC0) !== 0x80) return false;
-            if (byte === 0xE0 && buffer[i + 1] < 0xA0) return false;
-            if (byte === 0xED && buffer[i + 1] > 0x9F) return false;
-            i += 2;
-        } else if (byte >= 0xF0 && byte <= 0xF4) {
-            if (i + 3 >= buffer.length) return false;
-            if ((buffer[i + 1] & 0xC0) !== 0x80 || (buffer[i + 2] & 0xC0) !== 0x80 || (buffer[i + 3] & 0xC0) !== 0x80) return false;
-            if (byte === 0xF0 && buffer[i + 1] < 0x90) return false;
-            if (byte === 0xF4 && buffer[i + 1] > 0x8F) return false;
-            i += 3;
-        } else {
-            return false;
-        }
-    }
-    return true;
-}
-
-function hasWin1251Cyrillic(buffer) {
-    for (let i = 0; i < buffer.length; i++) {
-        const byte = buffer[i];
-        if ((byte >= 0xC0 && byte <= 0xFF) || byte === 0xA8 || byte === 0xB8 || byte === 0xA9 || byte === 0xB9) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function detectEncoding(buffer) {
-    if (isValidUtf8(buffer)) {
-        const text = buffer.toString('utf8');
-        const cyrillicPattern = /[\u0400-\u04FF]/;
-        if (cyrillicPattern.test(text)) {
-            return 'utf8';
-        }
-    }
-    if (hasWin1251Cyrillic(buffer)) {
-        return 'win1251';
-    }
-    return 'utf8';
-}
-
-function decodeSubtitleBuffer(subBuffer) {
-    const encoding = detectEncoding(subBuffer);
-    if (encoding === 'win1251') {
-        return iconv.decode(subBuffer, 'win1251');
-    }
-    return subBuffer.toString('utf8');
-}
-// Track cache hit counts per key (for log throttling)
-const cacheHitCount = {};
+// Release expired data even when no more requests arrive for those keys.
+const cleanupTimer = setInterval(() => {
+    cache.prune(); proxyCache.prune(); failedDownloads.prune(); abuse.clients.prune();
+}, 60000);
+cleanupTimer.unref();
 
 // Hard blacklist for attacking IPs
 const BLACKLISTED_IPS = new Set([
@@ -96,40 +42,31 @@ const BLACKLISTED_IPS = new Set([
     '10.19.235.3'
 ]);
 
-// Extract real client IP from x-forwarded-for header (first IP in comma-separated list)
-function getClientIp(req) {
-    const xff = req.headers['x-forwarded-for'];
-    if (xff) {
-        // x-forwarded-for can contain: "client, proxy1, proxy2"
-        const firstIp = xff.split(',')[0].trim();
-        return firstIp;
-    }
-    return req.socket.remoteAddress || 'unknown';
-}
-
 function getProviderName(sub) {
     const source = sub.id.split('_')[0];
     if (source === 'subsunacs') return 'Subsunacs.net';
     if (source === 'subssab') return 'Subs.sab.bz';
     if (source === 'subsland') return 'SubsLand.com';
     if (source === 'easternspirit') return 'EasternSpirit.org';
-    if (source === 'opensubtitles') return 'OpenSubtitles.org';
+    if (source === 'subsource') return 'SubSource.net';
     return source;
 }
 
-function getProxyUrl(sub, season, episode) {
+function getProxyUrl(sub, season, episode, filename) {
     let proxyUrl = `${BASE_URL}/proxy?url=${encodeURIComponent(sub.url)}&source=${sub.id.split('_')[0]}`;
     if (season && episode) {
         proxyUrl += `&season=${encodeURIComponent(season)}&episode=${encodeURIComponent(episode)}`;
     }
+    if (Number(sub.fps) >= 10 && Number(sub.fps) <= 120) proxyUrl += '&fps=' + Number(sub.fps);
+    if (typeof filename === 'string' && filename.length <= 300) proxyUrl += '&filename=' + encodeURIComponent(filename);
     return proxyUrl;
 }
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.1.7',
+    version: '1.2.0',
     name: 'Bulgarian Subtitles',
-    description: 'Bg subs - Бг субтитри от 5 от най популярните сайтове за субтитри в България.',
+    description: 'Български субтитри от Subsunacs.net, Subs.sab.bz, SubsLand.com, SubSource.net и EasternSpirit.org.',
     
     // Слагаме го тук, защото Stremio го показва като кликаем линк под описанието
     contactEmail: 'Ilian.vezirski@gmail.com',
@@ -154,135 +91,120 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-builder.defineSubtitlesHandler(async ({ type, id, extra }) => {
-    console.log(`[Request] Type: ${type}, ID: ${id}`);
+const SEARCH_TIMEOUT_MS = Math.max(100, Math.min(60000, Number(process.env.SEARCH_TIMEOUT_MS) || 8000));
 
+builder.defineSubtitlesHandler(async ({ type, id, extra = {} }) => {
+    if (!['movie', 'series'].includes(type) || typeof id !== 'string' ||
+        !(type === 'series' ? /^tt\d+:\d{1,3}:\d{1,4}$/ : /^tt\d+$/).test(id)) return { subtitles: [] };
     const [imdbId, season, episode] = id.split(':');
+    const key = type + ':' + id;
+    const format = raw => ({ subtitles: raw.map((sub, i) => ({
+        id: getProviderName(sub) + '_' + i, lang: 'bul',
+        url: getProxyUrl(sub, season, episode, extra.filename), name: sub.name
+    })) });
+    const cached = cache.get(key);
+    if (cached) return format(cached);
+    if (pendingSearches.has(key)) return format(await pendingSearches.get(key));
+    if (pendingSearches.size >= 12) return { subtitles: [], cacheMaxAge: 0 };
 
-    if (cache[id] && (Date.now() - cache[id].timestamp < CACHE_TTL)) {
-        console.log(`[Cache] HIT for ${id}`);
-        const subtitles = cache[id].subtitles.map((sub, i) => ({ 
-            id: getProviderName(sub) + '_' + i, 
-            lang: 'bul', 
-            url: getProxyUrl(sub, season, episode),
-            name: sub.name
-        }));
-        return { subtitles };
-    }
-    console.log(`[Cache] MISS for ${id}`);
-    
-    if (!imdbId || !imdbId.startsWith('tt')) {
-        return { subtitles: [] };
-    }
-
-    try {
-        const [openSubtitlesSubs, subsSabSubs, subslandSubs, subsunacsSubs] = await Promise.all([
-            openSubtitles.search(imdbId, type, season, episode).catch(err => {
-                console.error('[OpenSubtitles Error]', err.message);
-                return [];
-            }),
-            subsSab.search(imdbId, type, season, episode).catch(err => {
-                console.error('[Subs.sab.bz Error]', err.message);
-                return [];
-            }),
-            subsland.search(imdbId, type, season, episode).catch(err => {
-                console.error('[SubsLand Error]', err.message);
-                return [];
-            }),
-            subsunacs.search(imdbId, type, season, episode).catch(err => {
-                console.error('[Subsunacs Error]', err.message);
-                return [];
-            })
-        ]);
-
-        let rawSubtitles = [...openSubtitlesSubs, ...subsSabSubs, ...subslandSubs, ...subsunacsSubs];
-
-        // EasternSpirit as fallback - only search if no subtitles found from other providers
-        if (rawSubtitles.length === 0) {
-            console.log('[EasternSpirit] No subs from other providers, trying EasternSpirit...');
-            const easternSpiritSubs = await easternSpirit.search(imdbId, type, season, episode).catch(err => {
-                console.error('[EasternSpirit Error]', err.message);
-                return [];
-            });
-            rawSubtitles = [...easternSpiritSubs];
-        }
-        
-        console.log(`[Result] Found ${rawSubtitles.length} subtitles for ${id}`);
-
-        // Store raw subtitles in cache
-        cache[id] = {
-            subtitles: rawSubtitles,
-            timestamp: Date.now()
+    const task = (async () => {
+        const search = async (name, provider, budget = SEARCH_TIMEOUT_MS) => {
+            try { return await withDeadline(() => provider.search(imdbId, type, season, episode), budget); }
+            catch (error) { console.error('[' + name + '] ' + error.message); return []; }
         };
-        console.log(`[Cache] STORED for ${id}`);
-
-        const proxiedSubtitles = rawSubtitles.map((sub, i) => ({ 
-            id: getProviderName(sub) + '_' + i, 
-            lang: 'bul', 
-            url: getProxyUrl(sub, season, episode),
-            name: sub.name
-        }));
-
-        return { subtitles: proxiedSubtitles };
-    } catch (error) {
-        console.error('[Handler Error]', error);
-        return { subtitles: [] };
-    }
+        const results = await Promise.all([
+            search('Subs.sab.bz', subsSab), search('SubsLand', subsland), search('Subsunacs', subsunacs)
+        ]);
+        let raw = results.flat();
+        // One catalog may contain only split-CD or unsupported releases. Offer an independent fallback.
+        if (results.filter(items => items.length).length < 2) raw.push(...await search('SubSource', subsource));
+        if (!raw.length) raw = await search('EasternSpirit', easternSpirit, Math.min(SEARCH_TIMEOUT_MS, 4000));
+        // Short retry windows let temporarily failing providers recover instead of hiding results for 48 hours.
+        cache.set(key, raw, raw.length ? CACHE_TTL : 30 * 1000);
+        console.log('[Result] Found ' + raw.length + ' subtitles for ' + id);
+        return raw;
+    })();
+    pendingSearches.set(key, task);
+    try { return format(await task); }
+    finally { pendingSearches.delete(key); }
 });
 
 const app = express();
+app.disable('x-powered-by');
+app.set('query parser', 'simple');
+const proxyHops = Number(process.env.TRUST_PROXY_HOPS ?? (process.env.RENDER ? 1 : 0));
+if (!Number.isInteger(proxyHops) || proxyHops < 0 || proxyHops > 5) throw new Error('TRUST_PROXY_HOPS must be 0..5');
+app.set('trust proxy', proxyHops);
+
+function enforce(req, res, kind, limit) {
+    const result = abuse.consume(req.clientIp, kind, limit);
+    if (result.allowed) return true;
+    res.setHeader('Retry-After', String(result.retryAfter));
+    res.status(result.status).send(result.status === 403 ? 'Temporarily blocked for excessive requests.' : 'Too many requests. Try again later.');
+    return false;
+}
 
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    if (req.path === '/health') return next();
+    req.clientIp = normalizeIp(req.ip);
+    if (BLACKLISTED_IPS.has(req.clientIp)) return res.status(403).send('Blocked.');
+    if (!enforce(req, res, 'requests', 120)) return;
+    if (req.originalUrl.length > 4096) return res.status(414).send('Request URL too long');
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return res.status(405).send('Method not allowed');
     next();
 });
 
+function sendSubtitle(res, result) {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
+    res.setHeader('Cache-Control', 'public, max-age=7200');
+    res.setHeader('X-Subtitle-File', encodeURIComponent(result.fileName));
+    res.setHeader('X-Subtitle-Episode-Match', result.episodeMatched ? 'yes' : 'unknown');
+    return res.send(result.content);
+}
+
+function downloadFailure(error) {
+    return error.code === 'SUBTITLE_FPS_REQUIRED'
+        ? { status: 422, message: 'This MicroDVD subtitle needs FPS metadata. Select a time-based subtitle release.' }
+        : { status: 502, message: 'Subtitle source unavailable. Try again later.' };
+}
+
 app.get('/proxy', async (req, res) => {
-    const { url, source, season, episode } = req.query;
+    const { url, source, season, episode, fps, filename } = req.query;
     
     if (!url) {
         return res.status(400).send('Missing URL parameter');
     }
-
-    // Extract real client IP (first IP in x-forwarded-for chain)
-    const clientIp = getClientIp(req);
-    
-    // Hard blacklist check - block immediately
-    if (BLACKLISTED_IPS.has(clientIp)) {
-        console.log(`[Proxy] BLACKLISTED IP BLOCKED: ${clientIp} attempting ${url}`);
-        return res.status(403).send('Access denied.');
+    const hosts = {
+        subsunacs: ['subsunacs.net', 'www.subsunacs.net'],
+        subssab: ['subs.sab.bz'], subsland: ['subsland.com', 'www.subsland.com'],
+        easternspirit: ['www.easternspirit.org', 'easternspirit.org'],
+        subsource: ['subsource.net']
+    };
+    try {
+        if (typeof url !== 'string' || typeof source !== 'string' || !Object.hasOwn(hosts, source)) throw new Error('Invalid source');
+        if (fps !== undefined && (typeof fps !== 'string' || !/^\d{2,3}(?:\.\d{1,3})?$/.test(fps) || Number(fps) < 10 || Number(fps) > 120)) throw new Error('Invalid FPS');
+        if (filename !== undefined && (typeof filename !== 'string' || filename.length > 300)) throw new Error('Invalid filename');
+        const target = new URL(url);
+        if (!['http:', 'https:'].includes(target.protocol) || !hosts[source].includes(target.hostname) || target.username || target.password || target.port) throw new Error('Invalid URL');
+        if ((season !== undefined || episode !== undefined) &&
+            (typeof season !== 'string' || typeof episode !== 'string' || !/^\d{1,3}$/.test(season) || !/^\d{1,4}$/.test(episode))) throw new Error('Invalid episode');
+    } catch {
+        return res.status(400).send('Invalid subtitle request');
     }
-
-    // Per-IP rate limiting — applied BEFORE cache to block spammers completely
-    const now = Date.now();
-    if (!ipRateLimit[clientIp]) {
-        ipRateLimit[clientIp] = [];
-    }
-    ipRateLimit[clientIp] = ipRateLimit[clientIp].filter(t => now - t < IP_RATE_LIMIT_WINDOW);
-    if (ipRateLimit[clientIp].length >= IP_RATE_LIMIT_MAX) {
-        // Log only once per burst to avoid log spam
-        if (ipRateLimit[clientIp].length === IP_RATE_LIMIT_MAX) {
-            console.log(`[Proxy] RATE LIMITED IP ${clientIp}: ${url}`);
-        }
-        return res.status(429).send('Too many requests. Try again later.');
-    }
-    ipRateLimit[clientIp].push(now);
 
     // Build a unique cache key for this subtitle request
-    const cacheKey = `${source}|${url}|${season || ''}|${episode || ''}`;
+    const cacheKey = `${source}|${url}|${season || ''}|${episode || ''}|${fps || ''}|${filename || ''}`;
 
     // Serve from proxy cache if available
-    if (proxyCache[cacheKey] && (Date.now() - proxyCache[cacheKey].timestamp < PROXY_CACHE_TTL)) {
-        // Throttled logging — log only every 50th cache hit to reduce noise
-        cacheHitCount[cacheKey] = (cacheHitCount[cacheKey] || 0) + 1;
-        if (cacheHitCount[cacheKey] === 1 || cacheHitCount[cacheKey] % 50 === 0) {
-            console.log(`[Proxy] CACHE HIT #${cacheHitCount[cacheKey]} for ${url}`);
-        }
+    const cachedSubtitle = proxyCache.get(cacheKey);
+    if (cachedSubtitle) {
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
         res.setHeader('Cache-Control', 'public, max-age=86400');
-        return res.send(proxyCache[cacheKey].content);
+        return sendSubtitle(res, cachedSubtitle);
     }
 
     console.log(`[Proxy] Source: ${source}, URL: ${url}${season ? `, S${season}E${episode}` : ''}`);
@@ -296,14 +218,24 @@ app.get('/proxy', async (req, res) => {
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8');
                 res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
                 res.setHeader('Cache-Control', 'public, max-age=86400');
-                return res.send(content);
+                return sendSubtitle(res, content);
             }
             return res.status(404).send('Could not download subtitle');
         } catch (error) {
             console.error('[Proxy] Coalesced request error:', error.message);
-            return res.status(500).send(`Error downloading subtitle: ${error.message}`);
+            const failure = downloadFailure(error);
+            return res.status(failure.status).send(failure.message);
         }
     }
+
+    if (Object.keys(pendingDownloads).length >= 4) {
+        res.setHeader('Retry-After', '5');
+        return res.status(503).send('Downloads busy. Try again shortly.');
+    }
+
+    const previousFailure = failedDownloads.get(cacheKey);
+    if (previousFailure) return res.status(previousFailure.status).send(previousFailure.message);
+    if (!enforce(req, res, 'downloads', 10)) return;
 
     // Start a new download and register it for coalescing
     const downloadPromise = (async () => {
@@ -318,18 +250,8 @@ app.get('/proxy', async (req, res) => {
                 buffer = await subsland.download(url);
             } else if (source === 'easternspirit') {
                 buffer = await easternSpirit.download(url);
-            } else if (source === 'opensubtitles') {
-                buffer = await openSubtitles.download(url);
-            } else {
-                const response = await axios.get(url, {
-                    responseType: 'arraybuffer',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6',
-                        'Referer': url
-                    },
-                    timeout: 30000
-                });
-                buffer = Buffer.from(response.data);
+            } else if (source === 'subsource') {
+                buffer = await subsource.download(url);
             }
             
             if (!buffer || buffer.length === 0) {
@@ -339,37 +261,12 @@ app.get('/proxy', async (req, res) => {
             
             console.log(`[Proxy] Downloaded ${buffer.length} bytes`);
             
-            const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
-            const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72;
-            
-            const textStart = buffer.toString('utf8', 0, 100).toLowerCase();
-            if (textStart.includes('<!doctype') || textStart.includes('<html>') || textStart.includes('error')) {
-                console.log('[Proxy] Received HTML error page instead of archive');
-                console.log('[Proxy] Content:', buffer.toString('utf8', 0, 300));
-                return null;
-            }
-            
-            let content = null;
-            if (isZip) {
-                console.log('[Proxy] Detected ZIP file, extracting with adm-zip...');
-                content = extractSubtitleFromZip(buffer, season, episode);
-            } else if (isRar) {
-                console.log('[Proxy] Detected RAR file, extracting...');
-                content = await extractSubtitleFromRar(buffer, season, episode);
-            } else {
-                const text = buffer.toString('utf8').substring(0, 200);
-                if (text.includes('-->') || /^\d+\s*\n\d{2}:\d{2}/.test(text)) {
-                    console.log('[Proxy] Detected SRT file directly');
-                    content = decodeSubtitleBuffer(buffer);
-                } else {
-                    console.log('[Proxy] Unknown format, first 100 chars:', text.substring(0, 100));
-                    return null;
-                }
-            }
+            const content = await extractSubtitle(buffer, { season, episode, fps, filename });
+            if (content) console.log('[Archive] Selected ' + content.fileName);
 
             // Store in proxy cache
             if (content) {
-                proxyCache[cacheKey] = { content, timestamp: Date.now() };
+                proxyCache.set(cacheKey, content, PROXY_CACHE_TTL);
                 console.log(`[Proxy] Cached subtitle for: ${url}`);
             }
             return content;
@@ -387,123 +284,38 @@ app.get('/proxy', async (req, res) => {
             res.setHeader('Content-Type', 'text/plain; charset=utf-8');
             res.setHeader('Content-Disposition', 'attachment; filename="subtitle.srt"');
             res.setHeader('Cache-Control', 'public, max-age=86400');
-            return res.send(content);
+            return sendSubtitle(res, content);
         }
+        failedDownloads.set(cacheKey, { status: 404, message: 'Could not download subtitle' }, 30000);
         return res.status(404).send('Could not download subtitle');
     } catch (error) {
         console.error('[Proxy] Error:', error.message);
-        return res.status(500).send(`Error downloading subtitle: ${error.message}`);
+        const failure = downloadFailure(error);
+        failedDownloads.set(cacheKey, failure, 30000);
+        return res.status(failure.status).send(failure.message);
     } finally {
         delete pendingDownloads[cacheKey];
     }
 });
 
-function findSubtitleForEpisode(files, season, episode) {
-    const subtitleExtensions = ['.srt', '.ssa', '.ass', '.vtt'];
-    
-    const subFiles = files.filter(f => {
-        const name = (f.path || f.name || f.entryName || '').toLowerCase();
-        return subtitleExtensions.some(ext => name.endsWith(ext));
-    });
-    
-    if (subFiles.length === 0) return null;
-    if (subFiles.length === 1) return subFiles[0];
-    
-    if (season && episode) {
-        const s = String(season).padStart(2, '0');
-        const e = String(episode).padStart(2, '0');
-        const sNum = parseInt(season);
-        const eNum = parseInt(episode);
-        
-        const patterns = [
-            new RegExp(`s0*${sNum}e0*${eNum}`, 'i'),
-            new RegExp(`\\b0*${sNum}x0*${eNum}\\b`, 'i'),
-            new RegExp(`[\\.\\_\\-\\\s]0*${eNum}[\\.\\_\\-\\\s]`, 'i'),
-            new RegExp(`e0*${eNum}[^0-9]`, 'i'),
-        ];
-        
-        for (const pattern of patterns) {
-            const match = subFiles.find(f => {
-                const name = (f.path || f.name || f.entryName || '');
-                return pattern.test(name);
-            });
-            if (match) {
-                console.log(`[Proxy] Found episode match: ${match.path || match.name || match.entryName}`);
-                return match;
-            }
-        }
-        
-        console.log(`[Proxy] No specific episode file found for S${s}E${e}, files:`, subFiles.map(f => f.path || f.name || f.entryName));
-    }
-    
-    return subFiles[0];
-}
-
-// Extract subtitle content from ZIP — returns string or null (no res dependency)
-function extractSubtitleFromZip(buffer, season = null, episode = null) {
-    try {
-        const zip = new AdmZip(buffer);
-        const zipEntries = zip.getEntries();
-        const subFile = findSubtitleForEpisode(zipEntries, season, episode);
-        
-        if (!subFile) {
-            console.log('[Proxy] No subtitle file found in ZIP');
-            return null;
-        }
-
-        console.log(`[Proxy] Extracting from ZIP: ${subFile.entryName}`);
-        const subBuffer = zip.readFile(subFile);
-        return decodeSubtitleBuffer(subBuffer);
-        
-    } catch (error) {
-        console.error('[Proxy] ZIP extract error:', error.message);
-        throw error;
-    }
-}
-
-// Extract subtitle content from RAR — returns string or null (no res dependency)
-async function extractSubtitleFromRar(buffer, season = null, episode = null) {
-    try {
-        const extractor = await createExtractorFromData({ data: buffer });
-        const list = extractor.getFileList();
-        const fileHeaders = [...list.fileHeaders];
-        const filesWithPath = fileHeaders.map(f => ({ ...f, path: f.name }));
-        const subFileHeader = findSubtitleForEpisode(filesWithPath, season, episode);
-        
-        if (!subFileHeader) {
-            console.log('[Proxy] No subtitle file found in RAR');
-            return null;
-        }
-
-        console.log(`[Proxy] Extracting from RAR: ${subFileHeader.name}`);
-        
-        const extracted = extractor.extract({ files: [subFileHeader.name] });
-        const files = [...extracted.files];
-        
-        if (files.length === 0 || !files[0].extraction) {
-            console.log('[Proxy] Failed to extract file from RAR');
-            return null;
-        }
-        
-        const subBuffer = Buffer.from(files[0].extraction);
-        return decodeSubtitleBuffer(subBuffer);
-        
-    } catch (error) {
-        console.error('[Proxy] RAR extract error:', error.message);
-        throw error;
-    }
-}
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 app.get('/debug', async (req, res) => {
     const results = {
         port: PORT,
+        sources: getSourceDiagnostics(),
+        protection: { trackedClients: abuse.clients.size, denied: abuse.denied, temporaryBans: abuse.bans, proxyHops },
+        uptimeSeconds: Math.floor(process.uptime()),
+        memory: process.memoryUsage(),
+        pendingSearches: pendingSearches.size,
         baseUrl: BASE_URL,
         cache: {
-            size: Object.keys(cache).length,
+            size: cache.size,
             ttl: CACHE_TTL
         },
         proxyCache: {
-            size: Object.keys(proxyCache).length,
+            size: proxyCache.size,
+            bytes: proxyCache.bytes,
             ttl: PROXY_CACHE_TTL
         },
         pendingDownloads: Object.keys(pendingDownloads).length,
@@ -514,10 +326,25 @@ app.get('/debug', async (req, res) => {
     res.json(results);
 });
 
+app.use((req, res, next) => {
+    const match = req.path.match(/^\/subtitles\/(movie|series)\/([^/]+)(?:\/[^/]+)?\.json$/);
+    if (match) {
+        let id;
+        try { id = decodeURIComponent(match[2]); } catch { return res.status(400).send('Invalid subtitle ID'); }
+        const key = match[1] + ':' + id;
+        if (!cache.get(key) && !pendingSearches.has(key) && !enforce(req, res, 'searches', 20)) return;
+    }
+    next();
+});
 app.use(getRouter(builder.getInterface()));
 
 // Listen on 0.0.0.0 to accept connections from outside the container
-app.listen(PORT, '0.0.0.0', () => {
+if (require.main === module) app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Runtime] Node ${process.version}; heap limit ${Math.round(require('node:v8').getHeapStatistics().heap_size_limit / 1024 / 1024)} MiB`);
+    setInterval(() => {
+        const memory = process.memoryUsage();
+        console.log(`[Runtime] rss=${Math.round(memory.rss / 1024 / 1024)} MiB heap=${Math.round(memory.heapUsed / 1024 / 1024)} MiB searchCache=${cache.size} subtitleCache=${proxyCache.size} activeSearches=${pendingSearches.size} activeDownloads=${Object.keys(pendingDownloads).length}`);
+    }, 60000).unref();
     console.log(`
 🎬 Bulgarian Subtitles Addon is running!`);
     console.log(`
@@ -525,3 +352,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`
 📦 Install in Stremio: ${BASE_URL}/manifest.json`);
 });
+
+module.exports = { app, findSubtitleForEpisode, decodeSubtitleBuffer, extractSubtitleFromZip, extractSubtitleFromRar };

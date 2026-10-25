@@ -1,5 +1,9 @@
+const { normalizeTitle, queryVariants, rowMetadata, movieMatch, yearsMatch } = require('../lib/titles');
+const { getMetadata } = require('../lib/metadata');
+const { matchesEpisode, matchesSeasonPack, matchIdentifiedSeries } = require('../lib/episodes');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const iconv = require('iconv-lite');
 const { fuzzyMatch } = require('./fuzzy');
 const { getImdbMetadata } = require('./subsunacs');
 
@@ -26,30 +30,24 @@ const BROWSER_HEADERS = {
     'Sec-Ch-Ua-Platform': '"Windows"'
 };
 
-const JINA_PREFIX = 'https://r.jina.ai/';
-const CODETABS_PREFIX = 'https://api.codetabs.com/v1/proxy/?quest=';
-
 /**
- * Fetch an HTML page from SubsLand via Jina AI proxy (bypasses Cloudflare).
+ * Fetch directly; the site's HTML uses Windows-1251, not UTF-8.
  */
 async function fetchPage(url) {
-    const jinaUrl = `${JINA_PREFIX}${url}`;
-    const resp = await axios.get(jinaUrl, {
-        headers: {
-            'Accept': 'text/html',
-            'X-Return-Format': 'html'
-        },
+    const resp = await axios.get(url, {
+        responseType: 'arraybuffer',
+        headers: BROWSER_HEADERS,
         timeout: 20000
     });
-    return resp.data;
+    return iconv.decode(Buffer.from(resp.data), 'win1251');
 }
 
 /**
- * Download a binary file from SubsLand via codetabs proxy (bypasses Cloudflare).
+ * Download the original subtitle archive directly from SubsLand.
  */
 async function fetchBinary(url) {
-    const proxyUrl = `${CODETABS_PREFIX}${encodeURIComponent(url)}`;
-    const resp = await axios.get(proxyUrl, {
+    const resp = await axios.get(url, {
+        headers: { ...BROWSER_HEADERS, Referer: BASE_URL },
         responseType: 'arraybuffer',
         timeout: 30000
     });
@@ -59,13 +57,7 @@ async function fetchBinary(url) {
 /**
  * Normalize title for comparison - remove special chars, lowercase
  */
-function normalizeTitle(title) {
-    return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\u0400-\u04FF\s]/gi, ' ') // Keep letters, numbers, cyrillic
-        .replace(/\s+/g, ' ')
-        .trim();
-}
+
 
 // Sanitize a string for search queries: remove punctuation like :,-. and collapse spaces
 function sanitizeSearchString(s) {
@@ -87,104 +79,34 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
     
     // For TV series - check season/episode match
     if (season !== null && episode !== null) {
+        if (normalizedSub !== normalizedTitle && !normalizedSub.startsWith(normalizedTitle + ' ')) return { match: false, score: 0 };
         const s = String(season).padStart(2, '0');
         const e = String(episode).padStart(2, '0');
-        const sNum = parseInt(season);
-        const eNum = parseInt(episode);
         
-        // Common season/episode patterns
-        const sePatterns = [
-            new RegExp(`s0*${sNum}e0*${eNum}(?!\\d)`, 'i'),   // S03E01, S3E1 (not S3E10)
-            new RegExp(`${sNum}x0*${eNum}(?!\\d)`, 'i'),       // 3x01, 03x01 (not 3x10)  
-            new RegExp(`season\\s*0*${sNum}.*episode\\s*0*${eNum}(?!\\d)`, 'i'), // Season 3 Episode 1
-            new RegExp(`\\b0*${sNum}x0*${eNum}\\b`, 'i'),      // 03x01 with word boundaries
-        ];
-        
-        // Season pack patterns (full season without specific episode)
-        const seasonPackPatterns = [
-            new RegExp(`s0*${sNum}\\b(?!e)`, 'i'),             // S03 but not S03E
-            new RegExp(`\\bseason\\s*0*${sNum}\\b`, 'i'),     // Season 3
-            new RegExp(`\\bs0*${sNum}[\\s\\.-]*(complete|full|all)`, 'i'), // S03 Complete
-            new RegExp(`(complete|full).*s0*${sNum}\\b`, 'i'), // Complete S03
-            new RegExp(`\\b0*${sNum}\\b[\\s\\-]*(complete|full|all|season)`, 'i'),
-            new RegExp(`(complete|full|season)[\\s\\-]*0*${sNum}\\b`, 'i'),
-        ];
-        
-        const hasSeasonEpisode = sePatterns.some(pattern => pattern.test(subName));
-        const isSeasonPack = seasonPackPatterns.some(pattern => pattern.test(subName)) && 
-                             !hasSeasonEpisode;
-        
+        const hasSeasonEpisode = matchesEpisode(subName, season, episode);
+        const isSeasonPack = matchesSeasonPack(subName, season);
+
         if (!hasSeasonEpisode && !isSeasonPack) {
-            console.log(`[SubsLand Filter] Series subtitle "${subName}" doesn't match S${s}E${e} or season pack`);
+            if (process.env.DEBUG_SEARCH) console.log(`[SubsLand Filter] Series subtitle "${subName}" doesn't match S${s}E${e} or season pack`);
             return { match: false, score: 0 };
         }
         
         if (isSeasonPack) {
-            console.log(`[SubsLand Filter] "${subName}" is a season pack for S${s}`);
+            if (process.env.DEBUG_SEARCH) console.log(`[SubsLand Filter] "${subName}" is a season pack for S${s}`);
         }
         
         const matchScore = titleWords.filter(word => normalizedSub.includes(word)).length;
         const minMatches = Math.max(1, Math.ceil(titleWords.length * 0.6));
         
         if (matchScore < minMatches) {
-            console.log(`[SubsLand Filter] Series subtitle "${subName}" doesn't match title "${movieTitle}"`);
+            if (process.env.DEBUG_SEARCH) console.log(`[SubsLand Filter] Series subtitle "${subName}" doesn't match title "${movieTitle}"`);
             return { match: false, score: 0 };
         }
         
         return { match: true, score: matchScore + (isSeasonPack ? 5 : 10), isSeasonPack };
     }
     
-    // For movies - check year match
-    if (movieYear) {
-        const yearMatch = subName.match(/(19|20)\d{2}/);
-        if (yearMatch && yearMatch[0] !== movieYear) {
-            return { match: false, score: 0 };
-        }
-    }
-    
-    // For short titles (1-2 words), be VERY strict
-    if (titleWords.length <= 2) {
-        const startsWithTitle = titleWords.every((word, i) => subWords[i] === word);
-        if (!startsWithTitle) {
-            return { match: false, score: 0 };
-        }
-
-        const nextWordIndex = titleWords.length;
-        if (subWords[nextWordIndex]) {
-            const nextWord = subWords[nextWordIndex];
-            const isYear = /^(19|20)\d{2}$/.test(nextWord);
-            const isReleaseTerm = /^(720p|1080p|2160p|4k|bluray|bdrip|brrip|hdrip|webrip|web|dvdrip|hdtv|proper|repack|extended|unrated|directors|x264|x265|h264|h265|aac|dts|ac3|remux|uhd)$/i.test(nextWord);
-            const isAka = nextWord === 'aka' || nextWord === 'a';
-            const isNumber = /^\d+$/.test(nextWord);
-            const isEpisodePattern = /^\d{1,2}x\d{1,2}$/i.test(nextWord) || /^s\d{1,2}e\d{1,2}$/i.test(nextWord);
-            const isSeasonToken = /^season$/i.test(nextWord) || /^s\d{1,2}$/i.test(nextWord);
-
-            if (!isYear && !isReleaseTerm && !isAka && !isNumber && !isEpisodePattern && !isSeasonToken) {
-                return { match: false, score: 0 };
-            }
-        }
-    }
-    
-    // Calculate match score
-    const matchScore = titleWords.filter(word => normalizedSub.includes(word)).length;
-    const minMatches = Math.max(1, Math.ceil(titleWords.length * 0.5));
-
-    if (matchScore >= minMatches) {
-        return { match: true, score: matchScore };
-    }
-
-    // Fallback: fuzzy matching
-    try {
-        const fm = fuzzyMatch(subName, movieTitle);
-        if (fm.match) {
-            console.log(`[SubsLand Fuzzy] Accepted: lev=${fm.lev.toFixed(2)} overlap=${fm.overlap.toFixed(2)} score=${fm.score.toFixed(2)}`);
-            return { match: true, score: Math.round(fm.score * 10) };
-        }
-    } catch (e) {
-        console.error('[SubsLand Fuzzy] Error:', e.message);
-    }
-
-    return { match: false, score: matchScore };
+    return movieMatch(subName, movieTitle, movieYear);
 }
 
 /**
@@ -192,7 +114,7 @@ function isGoodMatch(subName, movieTitle, movieYear, season = null, episode = nu
  * category=1 is Bulgarian language
  * Download URLs are directly available in search results (very efficient)
  */
-async function search(imdbId, type, season, episode) {
+async function searchQuery(imdbId, type, season, episode, query) {
     try {
         const meta = await getMetadata(imdbId, type);
         if (!meta || !meta.name) {
@@ -203,14 +125,14 @@ async function search(imdbId, type, season, episode) {
         const year = meta.year ? String(meta.year).substring(0, 4) : '';
         const isSeries = type === 'series' && season && episode;
 
-        let searchQuery = sanitizeSearchString(meta.name);
+        let searchQuery = query || sanitizeSearchString(meta.name);
 
         console.log(`[SubsLand] Searching for: "${searchQuery}" (target: ${meta.name}${isSeries ? ` S${String(season).padStart(2,'0')}E${String(episode).padStart(2,'0')}` : ''}, year=${year || 'unknown'})`);
 
         const subtitles = [];
         const maxPagesLimit = 4;
 
-        // Parse a page and collect subtitles using regex (cheerio breaks table structure with Jina HTML)
+        // Parse each result row separately; the legacy page contains malformed table markup.
         const parsePage = (html) => {
             // Only parse after the search results marker to skip featured/carousel section
             const marker = 'Търсенето на субтитри приключи';
@@ -244,8 +166,10 @@ async function search(imdbId, type, season, episode) {
                 }
 
                 // Extract title: parse just this <tr> block with cheerio for reliable text extraction
-                const $tr = cheerio.load(trBlock);
+                const $tr = cheerio.load(`<table>${trBlock}</table>`);
                 const $titleLink = $tr('a[href*="/subtitles/"]').first();
+                const info = rowMetadata($tr, $titleLink.closest('tr'));
+                if (info.imdbIds.length && !info.imdbIds.includes(imdbId)) continue;
                 let name = $titleLink.text().trim();
 
                 // Fallback: extract from onmouseover tooltip (has release name)
@@ -261,12 +185,12 @@ async function search(imdbId, type, season, episode) {
                 if (yearFromName) subtitleYear = yearFromName[1];
 
                 // If page provides a year and it doesn't match movie year, skip
-                if (!isSeries && subtitleYear && year && String(subtitleYear) !== String(year)) {
+                if (!isSeries && subtitleYear && year && !yearsMatch(subtitleYear, year)) {
                     continue;
                 }
 
                 // Check if subtitle matches our movie/series
-                const matchResult = isSeries
+                const matchResult = info.imdbIds.includes(imdbId) ? (isSeries ? matchIdentifiedSeries(name, season, episode) : { match: true, score: 20 }) : isSeries
                     ? isGoodMatch(name, meta.name, null, season, episode)
                     : isGoodMatch(name, meta.name, year);
                 if (!matchResult.match) continue;
@@ -277,20 +201,25 @@ async function search(imdbId, type, season, episode) {
 
                 subtitles.push({
                     id: `subsland_${subId}`,
+                    name,
+                    fps: info.fps,
+                    discs: info.discs,
                     lang: 'bul',
                     url: downloadUrl,
                     score: matchScore
                 });
             }
 
-            // Detect pagination from raw HTML
+            // Read decoded attributes: the live site uses &amp;page= in HTML.
             let maxPage = 0;
-            const pageRegex = /[&?]page=(\d+)/g;
-            let pm;
-            while ((pm = pageRegex.exec(resultHtml)) !== null) {
-                const pNum = parseInt(pm[1], 10);
-                if (pNum > maxPage) maxPage = pNum;
-            }
+            const $ = cheerio.load(resultHtml);
+            $('a[href]').each((_, element) => {
+                let url;
+                try { url = new URL($(element).attr('href'), SEARCH_URL); } catch { return; }
+                const page = Number(url.searchParams.get('page'));
+                if (url.origin === BASE_URL && url.pathname === '/index.php' &&
+                    url.searchParams.get('s') === searchQuery && Number.isInteger(page) && page > maxPage) maxPage = page;
+            });
             return maxPage;
         };
 
@@ -306,7 +235,7 @@ async function search(imdbId, type, season, episode) {
         let maxFoundPage = parsePage(firstHtml);
 
         // If multiple pages, fetch them
-        for (let page = 1; page <= Math.min(maxFoundPage, maxPagesLimit); page++) {
+        for (let page = 1; page <= Math.min(maxFoundPage, maxPagesLimit) && !(isSeries && subtitles.length); page++) {
             const pageUrl = `${SEARCH_URL}?s=${encodeURIComponent(searchQuery)}&w=name&category=1&page=${page}`;
             console.log(`[SubsLand] Fetching page ${page + 1}: ${pageUrl}`);
             try {
@@ -325,7 +254,7 @@ async function search(imdbId, type, season, episode) {
             if (!dedup[s.id] || s.score > dedup[s.id].score) dedup[s.id] = s;
         }
         const results = Object.values(dedup);
-        results.sort((a, b) => b.score - a.score);
+        results.sort((a, b) => b.score - a.score || (!isSeries ? (a.discs || 1) - (b.discs || 1) : 0));
 
         console.log(`[SubsLand] Found ${results.length} subtitles`);
         return results;
@@ -334,6 +263,16 @@ async function search(imdbId, type, season, episode) {
         console.error('[SubsLand] Search error:', error.message);
         return [];
     }
+}
+
+async function search(imdbId, type, season, episode) {
+    const meta = await getMetadata(imdbId, type);
+    if (!meta) return [];
+    for (const query of queryVariants(meta.name)) {
+        const result = await searchQuery(imdbId, type, season, episode, query);
+        if (result.length) return result;
+    }
+    return [];
 }
 
 /**
@@ -380,66 +319,10 @@ async function download(downloadUrl) {
 
     } catch (error) {
         console.error('[SubsLand] Download error:', error.message);
-        return null;
+        throw error;
     }
 }
 
-async function getMetadata(imdbId, type) {
-    // Prefer IMDb scraping first
-    try {
-        const imdbMeta = await getImdbMetadata(imdbId);
-        if (imdbMeta && imdbMeta.name) {
-            console.log(`[SubsLand] IMDb metadata: ${imdbMeta.name} (${imdbMeta.year || 'unknown'})`);
-            return imdbMeta;
-        }
-    } catch (e) {
-        console.error('[SubsLand] IMDb fetch error:', e.message);
-    }
 
-    // Try Cinemeta next
-    try {
-        const metaType = type === 'series' ? 'series' : 'movie';
-        const url = `${CINEMETA_URL}/${metaType}/${imdbId}.json`;
-        
-        const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000
-        });
-
-        if (response.data && response.data.meta && response.data.meta.name) {
-            return {
-                name: response.data.meta.name,
-                year: response.data.meta.year || response.data.meta.releaseInfo
-            };
-        }
-    } catch (error) {
-        console.error('[SubsLand Cinemeta] Error:', error.message);
-    }
-    
-    // Fallback to TMDB
-    console.log('[SubsLand] Cinemeta failed, trying TMDB...');
-    try {
-        const tmdbType = type === 'series' ? 'tv' : 'movie';
-        const url = `${TMDB_URL}/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`;
-
-        const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000
-        });
-
-        const results = type === 'series' ? response.data.tv_results : response.data.movie_results;
-
-        if (results && results.length > 0) {
-            const item = results[0];
-            const name = item.title || item.name;
-            const yearStr = (item.release_date || item.first_air_date || '').substring(0, 4);
-            return { name, year: yearStr };
-        }
-    } catch (error) {
-        console.error('[SubsLand TMDB] Error:', error.message);
-    }
-
-    return null;
-}
 
 module.exports = { search, download };

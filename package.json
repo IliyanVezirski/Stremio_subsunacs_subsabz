@@ -3,7 +3,13 @@
   "version": "1.0.0",
   "description": "Stremio addon for Bulgarian subtitles from Subsunacs.net and Subs.sab.bz",
   "main": "index.js",
+  "engines": {
+    "node": ">=22.12.0 <25"
+  },
   "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:live": "node scripts/live_check.js",
+    "test:100": "node scripts/validate_100.js",
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
@@ -18,13 +24,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "adm-zip": "^0.5.16",
+    "7zip-bin-full": "26.5.1",
+    "adm-zip": "^0.6.1",
     "axios": "^1.6.0",
     "axios-cookiejar-support": "^6.0.5",
     "cheerio": "^1.0.0-rc.12",
     "express": "^4.18.2",
     "iconv-lite": "^0.6.3",
-    "node-unrar-js": "^2.0.2",
+    "ipaddr.js": "^2.5.0",
     "stremio-addon-sdk": "^1.6.10",
     "tough-cookie": "^6.0.0"
   },
@@ -32,6 +39,9 @@
     "nodemon": "^3.0.1"
   },
   "overrides": {
-    "undici": "5.28.3"
+    "router": {
+      "path-to-regexp": "0.1.13"
+    },
+    "tmp": "^0.2.7"
   }
 }

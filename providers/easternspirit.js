@@ -1,3 +1,6 @@
+const { matchesEpisode, matchesSeasonPack } = require('../lib/episodes');
+const { getMetadata } = require('../lib/metadata');
+const { attachRequestLimits } = require('../lib/requests');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { CookieJar } = require('tough-cookie');
@@ -12,35 +15,42 @@ let client = null;
 let jar = null;
 let sessionCsrf = null;
 let loggedIn = false;
+let sessionPromise;
+let sessionExpires = 0;
+let retryAfter = 0;
+let warnedMissingCredentials = false;
 
 /**
  * Initialize HTTP client with cookie jar
  */
 function initClient() {
     jar = new CookieJar();
-    client = wrapper(axios.create({
+    client = attachRequestLimits(wrapper(axios.create({
         jar,
         headers: { 'User-Agent': UA },
         timeout: 30000,
         maxRedirects: 5,
-        validateStatus: () => true
-    }));
+        validateStatus: status => status >= 200 && status < 300
+    })));
 }
 
 /**
  * Login to Eastern Spirit forum
  */
 async function login() {
-    const username = process.env.ES_USERNAME || 'zamunda_is_great';
-    const password = process.env.ES_PASSWORD || '102088077';
+    const username = process.env.ES_USERNAME;
+    const password = process.env.ES_PASSWORD;
 
     try {
         if (!client) initClient();
 
         // Get login page for CSRF token
         const loginPageResp = await client.get(`${BASE_URL}?/login/`);
-        const csrfMatch = loginPageResp.data.match(/name=["']csrfKey["']\s*value=["']([^"']+)/);
+        const loginPage = cheerio.load(loginPageResp.data);
+        const csrfValue = loginPage('input[name="csrfKey"]').attr('value');
+        const csrfMatch = csrfValue ? [null, csrfValue] : null;
         if (!csrfMatch) {
+            retryAfter = Date.now() + 5 * 60000;
             console.log('[EasternSpirit] Could not find CSRF token on login page');
             return false;
         }
@@ -64,6 +74,7 @@ async function login() {
         // Check if login succeeded
         const isLoggedIn = loginResp.data.includes('Sign Out') || loginResp.data.includes('Изход') || loginResp.data.includes('Unread Content');
         if (!isLoggedIn) {
+            retryAfter = Date.now() + 5 * 60000;
             console.log('[EasternSpirit] Login failed - check credentials');
             return false;
         }
@@ -72,10 +83,12 @@ async function login() {
         const newCsrf = loginResp.data.match(/csrfKey=([a-f0-9]+)/);
         sessionCsrf = newCsrf ? newCsrf[1] : csrfMatch[1];
         loggedIn = true;
+        sessionExpires = Date.now() + 5 * 60000;
         console.log('[EasternSpirit] Login successful');
         return true;
     } catch (err) {
-        console.error('[EasternSpirit] Login error:', err.message);
+        retryAfter = Date.now() + 5 * 60000;
+        console.error('[EasternSpirit] Login/access error:', err.message);
         return false;
     }
 }
@@ -84,23 +97,16 @@ async function login() {
  * Ensure we have an active session. Re-login if needed.
  */
 async function ensureSession() {
-    if (loggedIn && client) {
-        // Quick check: fetch a page and see if still logged in
-        try {
-            const resp = await client.get(BASE_URL);
-            if (resp.data.includes('Sign Out') || resp.data.includes('Изход')) {
-                // Update csrf
-                const csrf = resp.data.match(/csrfKey=([a-f0-9]+)/);
-                if (csrf) sessionCsrf = csrf[1];
-                return true;
-            }
-        } catch (e) { /* fall through to re-login */ }
+    if (!process.env.ES_USERNAME || !process.env.ES_PASSWORD) {
+        if (!warnedMissingCredentials) console.log('[EasternSpirit] Credentials not configured');
+        warnedMissingCredentials = true;
+        return false;
     }
-
-    // Need to login
-    initClient();
-    loggedIn = false;
-    return await login();
+    if (Date.now() < retryAfter) return false;
+    if (loggedIn && client && Date.now() < sessionExpires) return true;
+    if (sessionPromise) return sessionPromise;
+    sessionPromise = (async () => { initClient(); loggedIn = false; return login(); })();
+    try { return await sessionPromise; } finally { sessionPromise = null; }
 }
 
 /**
@@ -181,30 +187,7 @@ function isGoodMatch(resultTitle, targetTitle, targetYear) {
 /**
  * Get metadata for an IMDB ID using Cinemeta
  */
-async function getMetadata(imdbId, type) {
-    try {
-        const url = `https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`;
-        const resp = await axios.get(url, { timeout: 10000 });
-        if (resp.data && resp.data.meta) {
-            const meta = resp.data.meta;
-            const year = (meta.releaseInfo || meta.year || '').toString().substring(0, 4);
-            return { name: meta.name, year };
-        }
-    } catch (e) { /* fall through */ }
 
-    // Fallback: TMDB
-    try {
-        const tmdbKey = 'b019b78bbd3a80f0f3112369c3b8c243';
-        const resp = await axios.get(`https://api.themoviedb.org/3/find/${imdbId}?api_key=${tmdbKey}&external_source=imdb_id`, { timeout: 10000 });
-        const results = type === 'series' ? resp.data.tv_results : resp.data.movie_results;
-        if (results && results.length > 0) {
-            const item = results[0];
-            return { name: item.title || item.name, year: (item.release_date || item.first_air_date || '').substring(0, 4) };
-        }
-    } catch (e) { /* ignore */ }
-
-    return null;
-}
 
 /**
  * Search for subtitles on Eastern Spirit
@@ -340,33 +323,14 @@ async function getSeriesRevisions(fileId, slug, season, episode) {
 
         console.log(`[EasternSpirit] Found ${revisions.length} revisions`);
 
-        const epNum = parseInt(episode);
         const subtitles = [];
-
-        // Strategy 1: try to match revision index to episode number
-        // Revisions are typically uploaded in chronological order (ep1 first)
-        if (epNum > 0 && epNum <= revisions.length) {
-            const rev = revisions[epNum - 1];
-            subtitles.push({
-                id: `easternspirit_${fileId}_r${rev.id}`,
-                lang: 'bul',
-                url: `${BASE_URL}?/files/file/${fileId}-${slug}/&do=download&r=${rev.id}&csrfKey=${sessionCsrf}`,
-                score: 10
-            });
-            console.log(`[EasternSpirit] Episode ${epNum} -> revision ${rev.id} (by index)`);
-        }
-
-        // Also return the latest revision as fallback (might contain all episodes)
-        if (revisions.length === 1) {
-            const rev = revisions[0];
-            if (subtitles.length === 0) {
-                subtitles.push({
-                    id: `easternspirit_${fileId}_r${rev.id}`,
-                    lang: 'bul',
-                    url: `${BASE_URL}?/files/file/${fileId}-${slug}/&do=download&r=${rev.id}&csrfKey=${sessionCsrf}`,
-                    score: 5
-                });
-            }
+        // Revision IDs are upload identifiers, not episode numbers.
+        const matches = revisions.filter(revision => matchesEpisode(revision.name, season, episode) || matchesSeasonPack(revision.name, season));
+        const candidates = matches.length ? matches : revisions.length === 1 ? revisions : [];
+        for (const revision of candidates) {
+            subtitles.push({ id: 'easternspirit_' + fileId + '_r' + revision.id, lang: 'bul', name: revision.name,
+                url: BASE_URL + '?/files/file/' + fileId + '-' + slug + '/&do=download&r=' + revision.id + '&csrfKey=' + sessionCsrf,
+                score: matches.length ? 10 : 5 });
         }
 
         return subtitles;
@@ -379,20 +343,17 @@ async function getSeriesRevisions(fileId, slug, season, episode) {
 /**
  * Extract revision IDs from the download page
  */
-function extractRevisions(html, fileId, slug) {
-    const revisions = [];
-    const seen = new Set();
-    const regex = /do=download&(?:amp;)?r=(\d+)/g;
-    let m;
-    while ((m = regex.exec(html)) !== null) {
-        if (!seen.has(m[1])) {
-            seen.add(m[1]);
-            revisions.push({ id: m[1] });
-        }
-    }
-    // Sort by ID ascending (earliest revision first = episode 1)
-    revisions.sort((a, b) => parseInt(a.id) - parseInt(b.id));
-    return revisions;
+function extractRevisions(html) {
+    const $ = cheerio.load(html);
+    const seen = new Map();
+    $('a[href*="do=download"]').each((_, element) => {
+        const link = $(element);
+        const id = link.attr('href')?.match(/[?&]r=(\d+)/)?.[1];
+        if (!id || seen.has(id)) return;
+        const name = link.attr('download') || link.attr('title') || link.text().trim();
+        seen.set(id, { id, name });
+    });
+    return [...seen.values()].sort((a, b) => Number(a.id) - Number(b.id));
 }
 
 /**
@@ -446,4 +407,4 @@ async function download(url) {
     }
 }
 
-module.exports = { search, download };
+module.exports = { search, download, extractRevisions };

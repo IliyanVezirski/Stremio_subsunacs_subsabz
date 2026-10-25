@@ -1,0 +1,2316 @@
+{
+  "startedAt": "2026-10-25T16:44:36.681Z",
+  "sourceSha256": "c4de5809c68acf09e28cd269c02d7a524b2d8fdcf0734f3ec1c900dd2ebd8816",
+  "expected": 100,
+  "results": [
+    {
+      "type": "movie",
+      "id": "tt0133093",
+      "title": "The Matrix",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Matrix",
+          "status": 200,
+          "file": "The.Matrix.1999.2160p.MA.WEB-DL.TrueHD.Atmos.7.1.DV.HDR.H.265-FLUX.srt",
+          "episodeMatched": "unknown",
+          "cues": 961,
+          "cyrillic": 26469,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1834,
+      "found": 25,
+      "totalMs": 1870
+    },
+    {
+      "type": "movie",
+      "id": "tt0111161",
+      "title": "The Shawshank Redemption",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Shawshank Redemption",
+          "status": 200,
+          "file": "The Shawshank Redemption.srt",
+          "episodeMatched": "unknown",
+          "cues": 1394,
+          "cyrillic": 37250,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2477,
+      "found": 18,
+      "totalMs": 3071
+    },
+    {
+      "type": "movie",
+      "id": "tt0068646",
+      "title": "The Godfather",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Godfather Trilogy",
+          "status": 200,
+          "file": "The.Godfather.Trilogy.1972-1990.BluRay.1080p.DTS.x264.dxva-EuReKA\\The.Godfather.1972.BluRay.1080p.DTS.x264.dxva-EuReKA.srt",
+          "episodeMatched": "unknown",
+          "cues": 1093,
+          "cyrillic": 34648,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2849,
+      "found": 11,
+      "totalMs": 3476
+    },
+    {
+      "type": "movie",
+      "id": "tt0071562",
+      "title": "The Godfather Part II",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Godfather 2",
+          "status": 404,
+          "file": "",
+          "episodeMatched": null,
+          "cues": 0,
+          "cyrillic": 0,
+          "valid": false,
+          "error": "Could not download subtitle"
+        },
+        {
+          "source": "subsource",
+          "name": "The.Godfather.Part.II.1974.REMASTERED.1080p.BluRay.H264.AAC-RARBG",
+          "status": 200,
+          "file": "The Godfather 2 (1974).BG.srt",
+          "episodeMatched": "unknown",
+          "cues": 1136,
+          "cyrillic": 37963,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 3673,
+      "found": 8,
+      "totalMs": 11353
+    },
+    {
+      "type": "movie",
+      "id": "tt0468569",
+      "title": "The Dark Knight",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "The Dark Knight (2008)",
+          "status": 200,
+          "file": "The.Dark.Knight[2008]DvDrip-aXXo.srt",
+          "episodeMatched": "unknown",
+          "cues": 1538,
+          "cyrillic": 49301,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 991,
+      "found": 6,
+      "totalMs": 1238
+    },
+    {
+      "type": "movie",
+      "id": "tt0110912",
+      "title": "Pulp Fiction",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Pulp Fiction",
+          "status": 200,
+          "file": "Pulp.Fiction.1994.720p.HDTV.x264-THOR.srt",
+          "episodeMatched": "unknown",
+          "cues": 1866,
+          "cyrillic": 52693,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1624,
+      "found": 16,
+      "totalMs": 2236
+    },
+    {
+      "type": "movie",
+      "id": "tt0109830",
+      "title": "Forrest Gump",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "forrest gump",
+          "status": 404,
+          "file": "",
+          "episodeMatched": null,
+          "cues": 0,
+          "cyrillic": 0,
+          "valid": false,
+          "error": "Could not download subtitle"
+        },
+        {
+          "source": "subsunacs",
+          "name": "Forrest Gump",
+          "status": 200,
+          "file": "Forrest Gump.srt",
+          "episodeMatched": "unknown",
+          "cues": 1256,
+          "cyrillic": 37636,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1052,
+      "found": 11,
+      "totalMs": 8821
+    },
+    {
+      "type": "movie",
+      "id": "tt1375666",
+      "title": "Inception",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "Inception (2010)",
+          "status": 200,
+          "file": "Inception TS READNFO V2  XViD - IMAGiNE.srt",
+          "episodeMatched": "unknown",
+          "cues": 1363,
+          "cyrillic": 38879,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 889,
+      "found": 12,
+      "totalMs": 1127
+    },
+    {
+      "type": "movie",
+      "id": "tt0816692",
+      "title": "Interstellar",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Interstellar",
+          "status": 200,
+          "file": "Interstellar.2014.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-WARHD.srt",
+          "episodeMatched": "unknown",
+          "cues": 1985,
+          "cyrillic": 46509,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1859,
+      "found": 6,
+      "totalMs": 2437
+    },
+    {
+      "type": "movie",
+      "id": "tt0137523",
+      "title": "Fight Club",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "fight club 1999 dvdrip xvid dts-waf",
+          "status": 404,
+          "file": "",
+          "episodeMatched": null,
+          "cues": 0,
+          "cyrillic": 0,
+          "valid": false,
+          "error": "Could not download subtitle"
+        },
+        {
+          "source": "subsunacs",
+          "name": "Fight Club",
+          "status": 200,
+          "file": "Fight.Club.1999.720p.BluRay.DTS.x264-HiDt.srt",
+          "episodeMatched": "unknown",
+          "cues": 1680,
+          "cyrillic": 43640,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 948,
+      "found": 22,
+      "totalMs": 8220
+    },
+    {
+      "type": "movie",
+      "id": "tt0120737",
+      "title": "The Lord of the Rings: The Fellowship of the Ring",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Lord of the Rings - Trilogy",
+          "status": 200,
+          "file": "The.Lord.of.the.Rings.The.Return.of.the.King.2003.EXTENDED.HYBRID.1080p.WEBRip.x265.DDP5.1.Atmos-WAR.srt",
+          "episodeMatched": "unknown",
+          "cues": 1826,
+          "cyrillic": 37219,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1551,
+      "found": 35,
+      "totalMs": 1626
+    },
+    {
+      "type": "movie",
+      "id": "tt0167261",
+      "title": "The Lord of the Rings: The Two Towers",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Lord of the Rings: The Two Towers",
+          "status": 200,
+          "file": "The Lord Of The Rings The Two Towers (2002).sub",
+          "episodeMatched": "unknown",
+          "cues": 1301,
+          "cyrillic": 28122,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1552,
+      "found": 16,
+      "totalMs": 1690
+    },
+    {
+      "type": "movie",
+      "id": "tt0167260",
+      "title": "The Lord of the Rings: The Return of the King",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Lord of the Rings: The Return of the King",
+          "status": 200,
+          "file": "The Lord of the Rings- The Return of the King EXTENDED (2003).srt",
+          "episodeMatched": "unknown",
+          "cues": 1815,
+          "cyrillic": 37198,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2405,
+      "found": 23,
+      "totalMs": 2456
+    },
+    {
+      "type": "movie",
+      "id": "tt0172495",
+      "title": "Gladiator",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Gladiator",
+          "status": 200,
+          "file": "Gladiator.2000.EXTENDED.2160p.UHD.BluRay.X265-IAMABLE.srt",
+          "episodeMatched": "unknown",
+          "cues": 1224,
+          "cyrillic": 31509,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1851,
+      "found": 43,
+      "totalMs": 1886
+    },
+    {
+      "type": "movie",
+      "id": "tt0120338",
+      "title": "Titanic",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Titanic",
+          "status": 200,
+          "file": "Titanic.1997.2160p.Blu-ray-HDR.HEVC.TrueHd-DoMaNi.srt",
+          "episodeMatched": "unknown",
+          "cues": 1373,
+          "cyrillic": 37997,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 867,
+      "found": 22,
+      "totalMs": 930
+    },
+    {
+      "type": "movie",
+      "id": "tt0499549",
+      "title": "Avatar",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Avatar",
+          "status": 200,
+          "file": "Avatar.2009.Uhd.Bluray.2160P.Truehd.Atmos.7.1.Hevc-Framestor.srt",
+          "episodeMatched": "unknown",
+          "cues": 1153,
+          "cyrillic": 27790,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2317,
+      "found": 28,
+      "totalMs": 2349
+    },
+    {
+      "type": "movie",
+      "id": "tt0088247",
+      "title": "The Terminator",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Terminator",
+          "status": 200,
+          "file": "The.Terminator.1984.2160P.Uhd.Blu-Ray.Dv.Hdr.Hevc.Truehd.7.1.Atmos-W32.srt",
+          "episodeMatched": "unknown",
+          "cues": 525,
+          "cyrillic": 13178,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1802,
+      "found": 24,
+      "totalMs": 1834
+    },
+    {
+      "type": "movie",
+      "id": "tt0103064",
+      "title": "Terminator 2: Judgment Day",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Terminator 2: Judgment Day",
+          "status": 200,
+          "file": "Terminator.2.1991.2160p.UHD.BluRay.x265-WhiteRhino.srt",
+          "episodeMatched": "unknown",
+          "cues": 741,
+          "cyrillic": 16988,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1859,
+      "found": 24,
+      "totalMs": 1889
+    },
+    {
+      "type": "movie",
+      "id": "tt0078748",
+      "title": "Alien",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Alien",
+          "status": 200,
+          "file": "Alien 1979 Theatrical Cut BDRip-zaks.srt",
+          "episodeMatched": "unknown",
+          "cues": 757,
+          "cyrillic": 16884,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 4490,
+      "found": 27,
+      "totalMs": 4532
+    },
+    {
+      "type": "movie",
+      "id": "tt0090605",
+      "title": "Aliens",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Aliens",
+          "status": 200,
+          "file": "Aliens.1986.Special.Edition.2160p.UHD.Remux.HEVC.DoVi.TrueHD.Atmos.7.1-playBD.srt",
+          "episodeMatched": "unknown",
+          "cues": 1275,
+          "cyrillic": 33233,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 3044,
+      "found": 28,
+      "totalMs": 3086
+    },
+    {
+      "type": "movie",
+      "id": "tt0088763",
+      "title": "Back to the Future",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Back to the Future",
+          "status": 200,
+          "file": "Back.to.the.Future.1985.BRRip.x265-DiN.srt",
+          "episodeMatched": "unknown",
+          "cues": 983,
+          "cyrillic": 28799,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1772,
+      "found": 25,
+      "totalMs": 1814
+    },
+    {
+      "type": "movie",
+      "id": "tt0107290",
+      "title": "Jurassic Park",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Jurassic Park",
+          "status": 200,
+          "file": "Jurassic.Park.1993.2160p.UHD.BluRay.X265-IAMABLE.srt",
+          "episodeMatched": "unknown",
+          "cues": 1019,
+          "cyrillic": 28809,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1838,
+      "found": 26,
+      "totalMs": 1871
+    },
+    {
+      "type": "movie",
+      "id": "tt0108052",
+      "title": "Schindler's List",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Schindler's List",
+          "status": 200,
+          "file": "Schindler's List (1993) 23.976 fps BDRipped.srt",
+          "episodeMatched": "unknown",
+          "cues": 1630,
+          "cyrillic": 43846,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 856,
+      "found": 9,
+      "totalMs": 982
+    },
+    {
+      "type": "movie",
+      "id": "tt0120815",
+      "title": "Saving Private Ryan",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Saving Private Ryan",
+          "status": 200,
+          "file": "Saving Private Ryan 1998 1080p.srt",
+          "episodeMatched": "unknown",
+          "cues": 1505,
+          "cyrillic": 35021,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1684,
+      "found": 11,
+      "totalMs": 2308
+    },
+    {
+      "type": "movie",
+      "id": "tt0114369",
+      "title": "Se7en",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Seven",
+          "status": 200,
+          "file": "Se7en.720p.HDTV.x264-HINT.srt",
+          "episodeMatched": "unknown",
+          "cues": 1541,
+          "cyrillic": 38476,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 3857,
+      "found": 19,
+      "totalMs": 4483
+    },
+    {
+      "type": "movie",
+      "id": "tt0102926",
+      "title": "The Silence of the Lambs",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Silence Of The Lambs",
+          "status": 200,
+          "file": "wtsotl.srt",
+          "episodeMatched": "unknown",
+          "cues": 886,
+          "cyrillic": 27023,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2336,
+      "found": 14,
+      "totalMs": 2913
+    },
+    {
+      "type": "movie",
+      "id": "tt0099685",
+      "title": "Goodfellas",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "goodfellas",
+          "status": 200,
+          "file": "vv-gfb-xvid.srt",
+          "episodeMatched": "unknown",
+          "cues": 931,
+          "cyrillic": 28666,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 916,
+      "found": 8,
+      "totalMs": 1178
+    },
+    {
+      "type": "movie",
+      "id": "tt0407887",
+      "title": "The Departed",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "The Departed/От другата страна (2006)",
+          "status": 200,
+          "file": "The.Departed.2006.BluRay.720p.x264.HDBRiSe.srt",
+          "episodeMatched": "unknown",
+          "cues": 1559,
+          "cyrillic": 39186,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 989,
+      "found": 15,
+      "totalMs": 1228
+    },
+    {
+      "type": "movie",
+      "id": "tt0482571",
+      "title": "The Prestige",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Prestige",
+          "status": 404,
+          "file": "",
+          "episodeMatched": null,
+          "cues": 0,
+          "cyrillic": 0,
+          "valid": false,
+          "error": "Could not download subtitle"
+        },
+        {
+          "source": "subsource",
+          "name": "The.Prestige.2006.1080p.BluRay.DD5.1.x264-CtrlHD_bul",
+          "status": 200,
+          "file": "The.Prestige.2006.1080p.BluRay.DD5.1.x264-CtrlHD_bul.srt",
+          "episodeMatched": "unknown",
+          "cues": 1123,
+          "cyrillic": 31683,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2315,
+      "found": 10,
+      "totalMs": 10000
+    },
+    {
+      "type": "movie",
+      "id": "tt0209144",
+      "title": "Memento",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "Memento",
+          "status": 404,
+          "file": "",
+          "episodeMatched": null,
+          "cues": 0,
+          "cyrillic": 0,
+          "valid": false,
+          "error": "Could not download subtitle"
+        },
+        {
+          "source": "subsunacs",
+          "name": "Memento",
+          "status": 200,
+          "file": "Memento.2000.480p.BRRip.XviD.AC3-tahi.srt",
+          "episodeMatched": "unknown",
+          "cues": 1292,
+          "cyrillic": 32281,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 880,
+      "found": 12,
+      "totalMs": 8204
+    },
+    {
+      "type": "movie",
+      "id": "tt2582802",
+      "title": "Whiplash",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Whiplash",
+          "status": 200,
+          "file": "Whiplash.2014.1080p.BluRay.x264-SPARKS.srt",
+          "episodeMatched": "unknown",
+          "cues": 918,
+          "cyrillic": 21782,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1583,
+      "found": 6,
+      "totalMs": 2162
+    },
+    {
+      "type": "movie",
+      "id": "tt6751668",
+      "title": "Parasite",
+      "success": false,
+      "attempts": [],
+      "searchStatus": 200,
+      "searchMs": 1887,
+      "found": 0,
+      "error": "No matching subtitles found",
+      "totalMs": 1888
+    },
+    {
+      "type": "movie",
+      "id": "tt0120689",
+      "title": "The Green Mile",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Green Mile",
+          "status": 200,
+          "file": "The.Green.Mile.1999.2160p.iT.WEB-DL.DDP.5.1.Atmos.DV.HEVC-MiON.srt",
+          "episodeMatched": "unknown",
+          "cues": 1556,
+          "cyrillic": 35405,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1549,
+      "found": 16,
+      "totalMs": 1590
+    },
+    {
+      "type": "movie",
+      "id": "tt0110413",
+      "title": "Leon: The Professional",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Leon - The Professional",
+          "status": 200,
+          "file": "Leon.1994.2160p.UHD.BluRay.REMUX.HDR10.HEVC.ATMOS.TrueHD 7.1-AROMA.srt",
+          "episodeMatched": "unknown",
+          "cues": 973,
+          "cyrillic": 24581,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 929,
+      "found": 20,
+      "totalMs": 956
+    },
+    {
+      "type": "movie",
+      "id": "tt0114814",
+      "title": "The Usual Suspects",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Usual Suspects",
+          "status": 200,
+          "file": "The Usual Suspects.1995.2160p.UHD.BluRay.HDR.DoVi.DTS-HD MA 5.1.x265-SPHD.srt",
+          "episodeMatched": "unknown",
+          "cues": 1033,
+          "cyrillic": 29180,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1558,
+      "found": 17,
+      "totalMs": 1601
+    },
+    {
+      "type": "movie",
+      "id": "tt0112573",
+      "title": "Braveheart",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Braveheart",
+          "status": 200,
+          "file": "Braveheart.1995.2160p.UHD.BluRay.X265-IAMABLE.srt",
+          "episodeMatched": "unknown",
+          "cues": 961,
+          "cyrillic": 25481,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 881,
+      "found": 34,
+      "totalMs": 916
+    },
+    {
+      "type": "movie",
+      "id": "tt0120382",
+      "title": "The Truman Show",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Truman Show",
+          "status": 200,
+          "file": "The Truman Show (1998) 23.976 fps DVDRipped.srt",
+          "episodeMatched": "unknown",
+          "cues": 810,
+          "cyrillic": 21265,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1782,
+      "found": 16,
+      "totalMs": 1878
+    },
+    {
+      "type": "movie",
+      "id": "tt1130884",
+      "title": "Shutter Island",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Shutter Island",
+          "status": 200,
+          "file": "Shutter.Island.2010.1080p.Blu-ray.AVC.DTS-HD.MA.5.1.srt",
+          "episodeMatched": "unknown",
+          "cues": 1349,
+          "cyrillic": 38918,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 981,
+      "found": 10,
+      "totalMs": 1089
+    },
+    {
+      "type": "movie",
+      "id": "tt1675434",
+      "title": "The Intouchables",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Intouchables",
+          "status": 200,
+          "file": "Intouchables.2011.FRENCH.480p.BRRip.XviD.AC3-NYDIC.srt",
+          "episodeMatched": "unknown",
+          "cues": 1242,
+          "cyrillic": 32863,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2418,
+      "found": 3,
+      "totalMs": 3007
+    },
+    {
+      "type": "movie",
+      "id": "tt2911666",
+      "title": "John Wick",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "John Wick",
+          "status": 200,
+          "file": "John.Wick.2014.1080p.BluRay.x264-SPARKS.srt",
+          "episodeMatched": "unknown",
+          "cues": 475,
+          "cyrillic": 10904,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 884,
+      "found": 10,
+      "totalMs": 907
+    },
+    {
+      "type": "movie",
+      "id": "tt1392190",
+      "title": "Mad Max: Fury Road",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Mad Max: Fury Road",
+          "status": 200,
+          "file": "Mad.Max.Fury.Road.2015.1080p.Blu-ray.CEE.AVC.TrueHD.7.1.srt",
+          "episodeMatched": "unknown",
+          "cues": 617,
+          "cyrillic": 10668,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1023,
+      "found": 12,
+      "totalMs": 1140
+    },
+    {
+      "type": "movie",
+      "id": "tt0848228",
+      "title": "The Avengers",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Avengers",
+          "status": 200,
+          "file": "The.Avengers.2012.DVDRip.X264.AC3-NYDIC.srt",
+          "episodeMatched": "unknown",
+          "cues": 1511,
+          "cyrillic": 40393,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1508,
+      "found": 19,
+      "totalMs": 1621
+    },
+    {
+      "type": "movie",
+      "id": "tt4154796",
+      "title": "Avengers: Endgame",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Avengers: Endgame",
+          "status": 200,
+          "file": "Avengers.Endgame.2019.IMAX.1080p.DSNP.WEB-DL.DDP5.1.Atmos.H.264-MZABI.srt",
+          "episodeMatched": "unknown",
+          "cues": 1600,
+          "cyrillic": 37581,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1393,
+      "found": 11,
+      "totalMs": 1436
+    },
+    {
+      "type": "movie",
+      "id": "tt4154756",
+      "title": "Avengers: Infinity War",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Avengers: Infinity War",
+          "status": 200,
+          "file": "Avengers.Infinity.War.2018.IMAX.1080p.DSNP.WEB-DL.DDP5.1.Atmos.H.264-MZABI.srt",
+          "episodeMatched": "unknown",
+          "cues": 1234,
+          "cyrillic": 28810,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1498,
+      "found": 11,
+      "totalMs": 1540
+    },
+    {
+      "type": "movie",
+      "id": "tt0371746",
+      "title": "Iron Man",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Iron Man",
+          "status": 200,
+          "file": "Iron.Man.2008.720p.BluRay.x264-SEPTiC.srt",
+          "episodeMatched": "unknown",
+          "cues": 1093,
+          "cyrillic": 30801,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1852,
+      "found": 10,
+      "totalMs": 2376
+    },
+    {
+      "type": "movie",
+      "id": "tt10872600",
+      "title": "Spider-Man: No Way Home",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "Spider-Man: No Way Home / Спайдър-Мен: Няма път към д... (2021)",
+          "status": 200,
+          "file": "Spider-Man No Way Home Extended Version 2022 1080p WEB-DL DD5 1 H 264-EVO.srt",
+          "episodeMatched": "unknown",
+          "cues": 2145,
+          "cyrillic": 45314,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 936,
+      "found": 2,
+      "totalMs": 1105
+    },
+    {
+      "type": "movie",
+      "id": "tt1160419",
+      "title": "Dune",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "Dune / Дюн (2021)",
+          "status": 200,
+          "file": "Dune.2021.BluRay.x265.BGAudio-Teemo.srt",
+          "episodeMatched": "unknown",
+          "cues": 1250,
+          "cyrillic": 25925,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1045,
+      "found": 8,
+      "totalMs": 1203
+    },
+    {
+      "type": "movie",
+      "id": "tt15239678",
+      "title": "Dune: Part Two",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "Dune: Part Two / Дюн: Част втора (2024)",
+          "status": 200,
+          "file": "Dune Part Two 2024 1080p BluRay DDP 5 1 H 265-iVy.srt",
+          "episodeMatched": "unknown",
+          "cues": 1326,
+          "cyrillic": 25232,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 847,
+      "found": 5,
+      "totalMs": 1081
+    },
+    {
+      "type": "movie",
+      "id": "tt15398776",
+      "title": "Oppenheimer",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "Oppenheimer / Опенхаймер (2023)",
+          "status": 200,
+          "file": "Oppenheimer BG.srt",
+          "episodeMatched": "unknown",
+          "cues": 2847,
+          "cyrillic": 71164,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1533,
+      "found": 4,
+      "totalMs": 1727
+    },
+    {
+      "type": "movie",
+      "id": "tt6710474",
+      "title": "Everything Everywhere All at Once",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Everything Everywhere All At Once",
+          "status": 200,
+          "file": "Everything.Everywhere.All.At.Once.2022.1080p.WEBRip.x264.AAC5.1-[YTS.MX].srt",
+          "episodeMatched": "unknown",
+          "cues": 1232,
+          "cyrillic": 32457,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1627,
+      "found": 1,
+      "totalMs": 2223
+    },
+    {
+      "type": "series",
+      "id": "tt0903747:1:1",
+      "title": "Breaking Bad",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "Breaking.Bad.S01e01.Dsr.Xvid-0Tv",
+          "status": 200,
+          "file": "breaking.bad.s01e01.dsr.xvid-0tv.srt",
+          "episodeMatched": "yes",
+          "cues": 646,
+          "cyrillic": 12669,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 875,
+      "found": 6,
+      "totalMs": 1030
+    },
+    {
+      "type": "series",
+      "id": "tt0944947:1:1",
+      "title": "Game of Thrones",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Game Of Thrones - 01x01",
+          "status": 200,
+          "file": "game.of.thrones.s01e01.hdtv.xvid-fever.srt",
+          "episodeMatched": "yes",
+          "cues": 585,
+          "cyrillic": 13292,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1780,
+      "found": 3,
+      "totalMs": 2395
+    },
+    {
+      "type": "series",
+      "id": "tt0108778:1:1",
+      "title": "Friends",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "friends season 1",
+          "status": 200,
+          "file": "Friends - 1x01 - TOW It All Began.sub",
+          "episodeMatched": "yes",
+          "cues": 430,
+          "cyrillic": 12745,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1635,
+      "found": 3,
+      "totalMs": 1929
+    },
+    {
+      "type": "series",
+      "id": "tt0898266:1:1",
+      "title": "The Big Bang Theory",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Big Bang Theory - 01 - Complete Season",
+          "status": 200,
+          "file": "the.big.bang.theory.s01e01.hdtv.xvid-xor.srt",
+          "episodeMatched": "yes",
+          "cues": 364,
+          "cyrillic": 10555,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2427,
+      "found": 1,
+      "totalMs": 2993
+    },
+    {
+      "type": "series",
+      "id": "tt0460649:1:1",
+      "title": "How I Met Your Mother",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "How I Met Your Mother - Season 1",
+          "status": 200,
+          "file": "how.i.met.your.mother.s01e01.hdtv.xvid.fqm.proper.srt",
+          "episodeMatched": "yes",
+          "cues": 466,
+          "cyrillic": 10908,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2608,
+      "found": 4,
+      "totalMs": 2709
+    },
+    {
+      "type": "series",
+      "id": "tt0386676:1:1",
+      "title": "The Office",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Office - Season 1",
+          "status": 200,
+          "file": "The Office - 01\\The Office - 1x01 - Pilot.srt",
+          "episodeMatched": "yes",
+          "cues": 326,
+          "cyrillic": 9542,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1725,
+      "found": 4,
+      "totalMs": 1843
+    },
+    {
+      "type": "series",
+      "id": "tt1442437:9:9",
+      "title": "Modern Family",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Modern Family - 09x09",
+          "status": 200,
+          "file": "Modern.Family.S09E09.HDTV.x264-SVA.srt",
+          "episodeMatched": "yes",
+          "cues": 420,
+          "cyrillic": 13174,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2452,
+      "found": 1,
+      "totalMs": 2995
+    },
+    {
+      "type": "series",
+      "id": "tt1830617:1:10",
+      "title": "Grimm",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Grimm - Season 1",
+          "status": 200,
+          "file": "Grimm.S01.HDTV.XviD\\Grimm.S01E10.HDTV.XviD-LOL.srt",
+          "episodeMatched": "yes",
+          "cues": 505,
+          "cyrillic": 14017,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2212,
+      "found": 3,
+      "totalMs": 2432
+    },
+    {
+      "type": "series",
+      "id": "tt1567432:3:19",
+      "title": "Teen Wolf",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Teen Wolf - Season 1-4",
+          "status": 200,
+          "file": "Teen_Wolf_Season\\Teen_Wolf_Season_3.(subs.sab.bz)\\teen.wolf.s03e19.hdtv.x264-killers.srt",
+          "episodeMatched": "yes",
+          "cues": 308,
+          "cyrillic": 8030,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2266,
+      "found": 2,
+      "totalMs": 2515
+    },
+    {
+      "type": "series",
+      "id": "tt0411008:1:1",
+      "title": "Lost",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Lost - Season 1",
+          "status": 200,
+          "file": "Lost.01x01.1080p.BluRay.Remux.AVC.DTS-HD.MA.5.1-STM.srt",
+          "episodeMatched": "yes",
+          "cues": 291,
+          "cyrillic": 5917,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2473,
+      "found": 15,
+      "totalMs": 2588
+    },
+    {
+      "type": "series",
+      "id": "tt0455275:1:1",
+      "title": "Prison Break",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Prison Break - Season 1",
+          "status": 200,
+          "file": "Prison.Break.S01E01.720p.BluRay.DTS.x264-CHD.srt",
+          "episodeMatched": "yes",
+          "cues": 475,
+          "cyrillic": 14778,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1944,
+      "found": 10,
+      "totalMs": 2028
+    },
+    {
+      "type": "series",
+      "id": "tt0773262:1:1",
+      "title": "Dexter",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Dexter - Season 1",
+          "status": 200,
+          "file": "Dexter.S01.2006.720p.BluRay.DTS.x264-DON/Dexter.S01E01.720p.BluRay.DTS.x264-DON.srt",
+          "episodeMatched": "yes",
+          "cues": 518,
+          "cyrillic": 14271,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1772,
+      "found": 6,
+      "totalMs": 1906
+    },
+    {
+      "type": "series",
+      "id": "tt1520211:1:1",
+      "title": "The Walking Dead",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Walking Dead - Season 1",
+          "status": 200,
+          "file": "The.Walking.Dead.S01E01.BDRip.XviD-SAiNTS.srt",
+          "episodeMatched": "yes",
+          "cues": 341,
+          "cyrillic": 8836,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 3150,
+      "found": 3,
+      "totalMs": 3262
+    },
+    {
+      "type": "series",
+      "id": "tt0460681:1:1",
+      "title": "Supernatural",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Supernatural - 01x01",
+          "status": 200,
+          "file": "Supernatural.S01E01.HDTV.XviD-TV.BG.srt",
+          "episodeMatched": "yes",
+          "cues": 551,
+          "cyrillic": 13101,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 7987,
+      "found": 7,
+      "totalMs": 8595
+    },
+    {
+      "type": "series",
+      "id": "tt0412142:1:1",
+      "title": "House",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "House M.D. - Season 1",
+          "status": 200,
+          "file": "House.S01.REPACK.1080p.BluRay.x264-FilmHD/house.s01e01.1080p.bluray.x264-filmhd.srt",
+          "episodeMatched": "yes",
+          "cues": 624,
+          "cyrillic": 16940,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 3262,
+      "found": 3,
+      "totalMs": 3402
+    },
+    {
+      "type": "series",
+      "id": "tt1475582:1:1",
+      "title": "Sherlock",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Sherlock - 01x01",
+          "status": 200,
+          "file": "sherlock.1x01.a_study_in_pink.720p_hdtv_x264-fov.srt",
+          "episodeMatched": "yes",
+          "cues": 1113,
+          "cyrillic": 31206,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 986,
+      "found": 4,
+      "totalMs": 1085
+    },
+    {
+      "type": "series",
+      "id": "tt4574334:1:1",
+      "title": "Stranger Things",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Stranger Things - 01x01",
+          "status": 200,
+          "file": "Stranger.Things.S01E01.Chapter.One.The.Vanishing.Of.Will.Byers.720p.NF.WEBRip.DD5.1.x264-NTb.srt",
+          "episodeMatched": "yes",
+          "cues": 485,
+          "cyrillic": 12304,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1821,
+      "found": 4,
+      "totalMs": 1951
+    },
+    {
+      "type": "series",
+      "id": "tt3032476:1:1",
+      "title": "Better Call Saul",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Better Call Saul - Season 1",
+          "status": 200,
+          "file": "Better.Call.Saul.S01E01.1080p.BluRay.x264.DTS-Zelka.srt",
+          "episodeMatched": "yes",
+          "cues": 536,
+          "cyrillic": 15260,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1574,
+      "found": 3,
+      "totalMs": 1627
+    },
+    {
+      "type": "series",
+      "id": "tt7366338:1:1",
+      "title": "Chernobyl",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Chernobyl - 01x01",
+          "status": 200,
+          "file": "Chernobyl.S01E01.1.23.45.720p.AMZN.WEB-DL.DDP5.1.H.264-NTb.srt",
+          "episodeMatched": "yes",
+          "cues": 448,
+          "cyrillic": 11480,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 901,
+      "found": 9,
+      "totalMs": 935
+    },
+    {
+      "type": "series",
+      "id": "tt3581920:1:1",
+      "title": "The Last of Us",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Last of Us - 01x01",
+          "status": 200,
+          "file": "The.Last.of.Us.S01E01.WEBRip.x264-ION10.srt",
+          "episodeMatched": "yes",
+          "cues": 731,
+          "cyrillic": 17590,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1233,
+      "found": 7,
+      "totalMs": 1261
+    },
+    {
+      "type": "series",
+      "id": "tt8111088:1:8",
+      "title": "The Mandalorian",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Mandalorian - 01x08",
+          "status": 200,
+          "file": "The.Mandalorian.S01E08.WEBRip.x264-ION10.srt",
+          "episodeMatched": "yes",
+          "cues": 350,
+          "cyrillic": 10568,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2688,
+      "found": 2,
+      "totalMs": 3224
+    },
+    {
+      "type": "series",
+      "id": "tt1190634:1:1",
+      "title": "The Boys",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Boys - 01x01",
+          "status": 200,
+          "file": "The.Boys.2019.S01E01.The.Name.of.the.Game.720p.AMZN.WEB-DL.DDP5.1.H.264-NTG.srt",
+          "episodeMatched": "yes",
+          "cues": 1017,
+          "cyrillic": 22266,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 4151,
+      "found": 2,
+      "totalMs": 4769
+    },
+    {
+      "type": "series",
+      "id": "tt2306299:1:1",
+      "title": "Vikings",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Vikings - 01x01",
+          "status": 200,
+          "file": "Vikings.S01E01.480p.HDTV.x264-mSD.srt",
+          "episodeMatched": "yes",
+          "cues": 356,
+          "cyrillic": 9764,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1851,
+      "found": 1,
+      "totalMs": 2381
+    },
+    {
+      "type": "series",
+      "id": "tt2442560:1:1",
+      "title": "Peaky Blinders",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Peaky Blinders - 01x01",
+          "status": 200,
+          "file": "peaky.blinders.s01e01.hdtv.x264-tla.srt",
+          "episodeMatched": "yes",
+          "cues": 434,
+          "cyrillic": 13398,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1788,
+      "found": 2,
+      "totalMs": 2407
+    },
+    {
+      "type": "series",
+      "id": "tt4786824:1:1",
+      "title": "The Crown",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Crown - 01x01",
+          "status": 200,
+          "file": "The Crown - 01x01 - Wolferton Splash.DEFLATE.English.C.orig.Addic7ed.com.srt",
+          "episodeMatched": "yes",
+          "cues": 498,
+          "cyrillic": 12370,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2313,
+      "found": 4,
+      "totalMs": 2867
+    },
+    {
+      "type": "series",
+      "id": "tt2707408:1:1",
+      "title": "Narcos",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Narcos - 01x01",
+          "status": 200,
+          "file": "Narcos.S01E01.REPACK.WEBRip.x264-TASTETV.srt",
+          "episodeMatched": "yes",
+          "cues": 823,
+          "cyrillic": 23060,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1899,
+      "found": 3,
+      "totalMs": 2495
+    },
+    {
+      "type": "series",
+      "id": "tt6468322:1:1",
+      "title": "Money Heist",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Money Heist - 01x01",
+          "status": 200,
+          "file": "5rFF-cdp1x01.srt",
+          "episodeMatched": "yes",
+          "cues": 969,
+          "cyrillic": 26105,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1835,
+      "found": 2,
+      "totalMs": 2413
+    },
+    {
+      "type": "series",
+      "id": "tt5753856:1:1",
+      "title": "Dark",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Dark - 01 - Complete Season",
+          "status": 200,
+          "file": "Dark.S01E01.720p.WEBRip.x264-STRiFE.srt",
+          "episodeMatched": "yes",
+          "cues": 478,
+          "cyrillic": 11318,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 5122,
+      "found": 3,
+      "totalMs": 5732
+    },
+    {
+      "type": "series",
+      "id": "tt10919420:1:1",
+      "title": "Squid Game",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsource",
+          "name": "Squid.Game.S01.1080p.NF.WEB-DL.DDP5.1.Atmos.x264-UGM",
+          "status": 200,
+          "file": "Squid.Game.S01E01.Red.Light.Green.Light.1080p.NF.WEB-DL.DDP5.1.Atmos.x264-UGM.srt",
+          "episodeMatched": "yes",
+          "cues": 480,
+          "cyrillic": 12545,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1691,
+      "found": 1,
+      "totalMs": 2609
+    },
+    {
+      "type": "series",
+      "id": "tt5180504:1:1",
+      "title": "The Witcher",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The Witcher - 01x01",
+          "status": 200,
+          "file": "The Witcher - 1x01 - Episode 1.WEB-DL.bg.srt",
+          "episodeMatched": "yes",
+          "cues": 449,
+          "cyrillic": 11584,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2569,
+      "found": 1,
+      "totalMs": 3175
+    },
+    {
+      "type": "series",
+      "id": "tt0475784:1:1",
+      "title": "Westworld",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Westworld - Season 1",
+          "status": 200,
+          "file": "1080p/Westworld.S01E01.1080p.HDTV.x264-BATV.srt",
+          "episodeMatched": "yes",
+          "cues": 646,
+          "cyrillic": 16517,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 669,
+      "found": 3,
+      "totalMs": 863
+    },
+    {
+      "type": "series",
+      "id": "tt2356777:1:1",
+      "title": "True Detective",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "True Detective - Season 1",
+          "status": 200,
+          "file": "unicode/True.Detective.S01E01.720p.BluRay.DD5.1.x264-MDR.srt",
+          "episodeMatched": "yes",
+          "cues": 634,
+          "cyrillic": 18793,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 970,
+      "found": 8,
+      "totalMs": 1077
+    },
+    {
+      "type": "series",
+      "id": "tt2802850:1:1",
+      "title": "Fargo",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Fargo - Season 1",
+          "status": 200,
+          "file": "Fargo.S01.1080p.WEB-DL.DD5.1.H.264-BS.rar/Fargo.S01E01.The.Crocodile's.Dilemma.1080p.WEB-DL.DD5.1.H.264-BS.srt",
+          "episodeMatched": "yes",
+          "cues": 597,
+          "cyrillic": 16342,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 923,
+      "found": 4,
+      "totalMs": 1144
+    },
+    {
+      "type": "series",
+      "id": "tt11198330:1:1",
+      "title": "House of the Dragon",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "House of the Dragon - Season 1",
+          "status": 200,
+          "file": "House.of.the.Dragon.S01E01.2160p.UHD.BluRay.x265-BROADCAST.srt",
+          "episodeMatched": "yes",
+          "cues": 614,
+          "cyrillic": 17349,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 768,
+      "found": 4,
+      "totalMs": 823
+    },
+    {
+      "type": "series",
+      "id": "tt9288030:1:1",
+      "title": "Reacher",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Reacher - 01x01",
+          "status": 200,
+          "file": "5rFF-reacher-S1E1.srt",
+          "episodeMatched": "yes",
+          "cues": 659,
+          "cyrillic": 20309,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1885,
+      "found": 2,
+      "totalMs": 1969
+    },
+    {
+      "type": "series",
+      "id": "tt5057054:1:1",
+      "title": "Tom Clancy's Jack Ryan",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Jack Ryan - Season 1",
+          "status": 200,
+          "file": "Tom.Clancy's.Jack.Ryan.S01.2160p.UHD.Blu-ray.Remux.HEVC.TrueHD.7.1.Atmos-SiCFoI/Tom.Clancy's.Jack.Ryan.S01E01.Pilot.2160p.UHD.Blu-ray.Remux.HEVC.TrueHD.7.1.Atmos-SiCFoI.srt",
+          "episodeMatched": "yes",
+          "cues": 413,
+          "cyrillic": 12566,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1628,
+      "found": 3,
+      "totalMs": 1694
+    },
+    {
+      "type": "series",
+      "id": "tt14688458:1:8",
+      "title": "Silo",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsland",
+          "name": "Silo - S01E08 / Силоз (2023)",
+          "status": 200,
+          "file": "Silo.S01E08.1080p.HEVC.x265-MeGusta.srt",
+          "episodeMatched": "yes",
+          "cues": 448,
+          "cyrillic": 10886,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2726,
+      "found": 4,
+      "totalMs": 2886
+    },
+    {
+      "type": "series",
+      "id": "tt11280740:1:1",
+      "title": "Severance",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Severance - 01x01",
+          "status": 200,
+          "file": "Severance.S01E01.WEBRip.x264-ION10.srt",
+          "episodeMatched": "yes",
+          "cues": 573,
+          "cyrillic": 12989,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1003,
+      "found": 2,
+      "totalMs": 1038
+    },
+    {
+      "type": "series",
+      "id": "tt14452776:1:1",
+      "title": "The Bear",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Bear - 01x01",
+          "status": 200,
+          "file": "The.Bear.S01E01.1080p.DSNP.WEB-DL.DDP5.1.H.264-NTb - Copy.srt",
+          "episodeMatched": "yes",
+          "cues": 411,
+          "cyrillic": 11615,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 3508,
+      "found": 1,
+      "totalMs": 3539
+    },
+    {
+      "type": "series",
+      "id": "tt13443470:1:1",
+      "title": "Wednesday",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Wednesday - 01x01",
+          "status": 200,
+          "file": "Wednesday.S01E01.1080p.WEBRip.x265-RARBG.srt",
+          "episodeMatched": "yes",
+          "cues": 530,
+          "cyrillic": 16933,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 716,
+      "found": 2,
+      "totalMs": 739
+    },
+    {
+      "type": "series",
+      "id": "tt4052886:1:1",
+      "title": "Lucifer",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Lucifer - Season 1",
+          "status": 200,
+          "file": "Lucifer.S01E01.1080p.WEB-DL.DD5.1.H265-LGC.srt",
+          "episodeMatched": "yes",
+          "cues": 610,
+          "cyrillic": 18657,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2692,
+      "found": 3,
+      "totalMs": 2842
+    },
+    {
+      "type": "series",
+      "id": "tt2741602:1:1",
+      "title": "The Blacklist",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Blacklist - Season 1",
+          "status": 200,
+          "file": "The Blacklist-Season1\\The.Blacklist.101.hdtv-lol.srt",
+          "episodeMatched": "yes",
+          "cues": 473,
+          "cyrillic": 13437,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1491,
+      "found": 2,
+      "totalMs": 1639
+    },
+    {
+      "type": "series",
+      "id": "tt1632701:1:1",
+      "title": "Suits",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Suits - 01x01",
+          "status": 200,
+          "file": "Suits S01E01 720p BluRay DD5.1 x264-EbP.srt",
+          "episodeMatched": "yes",
+          "cues": 1149,
+          "cyrillic": 34270,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 3259,
+      "found": 4,
+      "totalMs": 3858
+    },
+    {
+      "type": "series",
+      "id": "tt1196946:1:1",
+      "title": "The Mentalist",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "The Mentalist - Season 1",
+          "status": 200,
+          "file": "The.Mentalist.S01.1080p.AMZN.WEB-DL.DDP5.1.H.264-WADU/The.Mentalist.S01E01.Pilot.1080p.AMZN.WEB-DL.DDP5.1.H.264-WADU.srt",
+          "episodeMatched": "yes",
+          "cues": 526,
+          "cyrillic": 13990,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2681,
+      "found": 5,
+      "totalMs": 2801
+    },
+    {
+      "type": "series",
+      "id": "tt1219024:1:1",
+      "title": "Castle",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subssab",
+          "name": "Castle - Season 1",
+          "status": 200,
+          "file": "Castle.2009.S01E01.720p.HDTV.x264-CTU.srt",
+          "episodeMatched": "yes",
+          "cues": 637,
+          "cyrillic": 21329,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1704,
+      "found": 3,
+      "totalMs": 1836
+    },
+    {
+      "type": "series",
+      "id": "tt0452046:8:6",
+      "title": "Criminal Minds",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Criminal Minds - 08x06",
+          "status": 200,
+          "file": "Criminal.Minds.S08E06.HDTV.x264-LOL.srt",
+          "episodeMatched": "yes",
+          "cues": 863,
+          "cyrillic": 21909,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 2737,
+      "found": 1,
+      "totalMs": 3273
+    },
+    {
+      "type": "series",
+      "id": "tt0364845:1:1",
+      "title": "NCIS",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "NCIS - 01x01 - Yankee White",
+          "status": 200,
+          "file": "NCIS S01E01 (Yankee White).sub",
+          "episodeMatched": "yes",
+          "cues": 712,
+          "cyrillic": 19627,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1741,
+      "found": 2,
+      "totalMs": 2389
+    },
+    {
+      "type": "series",
+      "id": "tt0106179:1:1",
+      "title": "The X-Files",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "The X-Files - 01 - Complete Season",
+          "status": 200,
+          "file": "The.X-Files.S01E01.720p.HDTV.x264.F1reFly.srt",
+          "episodeMatched": "yes",
+          "cues": 467,
+          "cyrillic": 13396,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 4032,
+      "found": 1,
+      "totalMs": 4665
+    },
+    {
+      "type": "series",
+      "id": "tt4687880:1:5",
+      "title": "Goliath",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Goliath - 01x05",
+          "status": 200,
+          "file": "Goliath.S01E05.WEBRip.rar.srt",
+          "episodeMatched": "yes",
+          "cues": 1055,
+          "cyrillic": 21789,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1740,
+      "found": 2,
+      "totalMs": 2374
+    },
+    {
+      "type": "series",
+      "id": "tt13111078:2:2",
+      "title": "Lioness",
+      "success": true,
+      "attempts": [
+        {
+          "source": "subsunacs",
+          "name": "Lioness - 02x02",
+          "status": 200,
+          "file": "Lioness S02E02 I Love My Country 720p AMZN WEB-DL DDP5 1 H 264-FLUX[EZTVx.to].srt",
+          "episodeMatched": "yes",
+          "cues": 762,
+          "cyrillic": 14251,
+          "valid": true
+        }
+      ],
+      "searchStatus": 200,
+      "searchMs": 1808,
+      "found": 1,
+      "totalMs": 2390
+    }
+  ],
+  "summary": {
+    "completed": 100,
+    "passed": 99,
+    "failed": 1,
+    "successPercent": 99
+  },
+  "manifestVersion": "1.2.0",
+  "debug": {
+    "port": "18081",
+    "sources": {
+      "subs.sab.bz": {
+        "requests": 163,
+        "failures": 5,
+        "cooldownUntil": 1792947372023,
+        "lastStatus": 403
+      },
+      "subsland.com": {
+        "requests": 180,
+        "failures": 0,
+        "cooldownUntil": 0
+      },
+      "subsunacs.net": {
+        "requests": 237,
+        "failures": 0,
+        "cooldownUntil": 0
+      },
+      "api.subsource.net": {
+        "requests": 138,
+        "failures": 0,
+        "cooldownUntil": 0
+      }
+    },
+    "protection": {
+      "trackedClients": 1,
+      "denied": 0,
+      "temporaryBans": 0,
+      "proxyHops": 0
+    },
+    "uptimeSeconds": 667,
+    "memory": {
+      "rss": 266379264,
+      "heapTotal": 191221760,
+      "heapUsed": 70859640,
+      "external": 9131062,
+      "arrayBuffers": 5328678
+    },
+    "pendingSearches": 0,
+    "baseUrl": "http://127.0.0.1:18081",
+    "cache": {
+      "size": 46,
+      "ttl": 300000
+    },
+    "proxyCache": {
+      "size": 99,
+      "bytes": 9977896,
+      "ttl": 7200000
+    },
+    "pendingDownloads": 0,
+    "env": {
+      "PORT": "18081"
+    }
+  },
+  "finishedAt": "2026-10-25T16:55:44.102Z",
+  "publishEligible": false
+}
