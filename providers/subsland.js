@@ -1,9 +1,15 @@
 const { normalizeTitle, queryVariants, rowMetadata, movieMatch, yearsMatch } = require('../lib/titles');
 const { getMetadata } = require('../lib/metadata');
+const { attachRequestLimits, canRequestSource } = require('../lib/requests');
 const { matchesEpisode, matchesSeasonPack, matchIdentifiedSeries } = require('../lib/episodes');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const iconv = require('iconv-lite');
+const { wrapper } = require('axios-cookiejar-support');
+const { CookieJar } = require('tough-cookie');
+const { existsSync } = require('node:fs');
+const { binary, version: curlVersion } = require('../lib/curl-binary');
+const { createCurlAdapter } = require('../lib/subsland-http');
 const { fuzzyMatch } = require('./fuzzy');
 const { getImdbMetadata } = require('./subsunacs');
 
@@ -13,28 +19,37 @@ const CINEMETA_URL = 'https://v3-cinemeta.strem.io/meta';
 const TMDB_API_KEY = 'b019b78bbd3a80f0f3112369c3b8c243';
 const TMDB_URL = 'https://api.themoviedb.org/3';
 
-// Browser-like headers to avoid Cloudflare 403 blocks
+// Keep the same public session and headers for search, details and downloads.
 const BROWSER_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'bg-BG,bg;q=0.9,en-US;q=0.8,en;q=0.7',
     'Accept-Encoding': 'gzip, deflate, br',
     'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'same-origin',
-    'Sec-Fetch-User': '?1',
-    'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-    'Sec-Ch-Ua-Mobile': '?0',
-    'Sec-Ch-Ua-Platform': '"Windows"'
+    'Referer': `${BASE_URL}/`
 };
+const nativeHttp = existsSync(binary) && process.env.SUBSLAND_HTTP_CLIENT !== 'axios';
+console.log(`[SubsLand] HTTP client: ${nativeHttp ? 'curl-impersonate ' + curlVersion : 'axios'}`);
+const client = attachRequestLimits(wrapper(axios.create({ jar: new CookieJar(), headers: BROWSER_HEADERS,
+    ...(nativeHttp ? { adapter: createCurlAdapter() } : {}) })));
+
+function canonicalUrl(value) {
+    const url = new URL(value, `${BASE_URL}/`);
+    if (!['subsland.com', 'www.subsland.com'].includes(url.hostname) ||
+        !['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port) {
+        throw new Error('Invalid SubsLand URL');
+    }
+    // www currently has a broken origin certificate (Cloudflare 525).
+    url.hostname = 'subsland.com';
+    url.protocol = 'https:';
+    return url.href;
+}
 
 /**
  * Fetch directly; the site's HTML uses Windows-1251, not UTF-8.
  */
 async function fetchPage(url) {
-    const resp = await axios.get(url, {
+    const resp = await client.get(canonicalUrl(url), {
         responseType: 'arraybuffer',
         headers: BROWSER_HEADERS,
         timeout: 20000
@@ -45,9 +60,9 @@ async function fetchPage(url) {
 /**
  * Download the original subtitle archive directly from SubsLand.
  */
-async function fetchBinary(url) {
-    const resp = await axios.get(url, {
-        headers: { ...BROWSER_HEADERS, Referer: BASE_URL },
+async function fetchBinary(url, referer = `${BASE_URL}/`) {
+    const resp = await client.get(canonicalUrl(url), {
+        headers: { Referer: canonicalUrl(referer) },
         responseType: 'arraybuffer',
         timeout: 30000
     });
@@ -266,9 +281,11 @@ async function searchQuery(imdbId, type, season, episode, query) {
 }
 
 async function search(imdbId, type, season, episode) {
+    if (!canRequestSource(BASE_URL)) return [];
     const meta = await getMetadata(imdbId, type);
     if (!meta) return [];
     for (const query of queryVariants(meta.name)) {
+        if (!canRequestSource(BASE_URL)) break;
         const result = await searchQuery(imdbId, type, season, episode, query);
         if (result.length) return result;
     }
@@ -325,4 +342,4 @@ async function download(downloadUrl) {
 
 
 
-module.exports = { search, download };
+module.exports = { search, download, client };

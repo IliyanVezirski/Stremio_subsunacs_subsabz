@@ -1,0 +1,53 @@
+{
+  "checkedAt": "2026-10-25T17:34:47.506Z",
+  "environment": "local",
+  "cases": [
+    {
+      "id": "tt0133093",
+      "title": "The Matrix",
+      "type": "movie",
+      "found": 1,
+      "attempts": [
+        {
+          "id": "subsland_14639",
+          "archiveBytes": 17164,
+          "cues": 630,
+          "cyrillic": 14512,
+          "success": true
+        }
+      ],
+      "success": true
+    },
+    {
+      "id": "tt0108778",
+      "title": "Friends",
+      "type": "series",
+      "season": 1,
+      "episode": 1,
+      "found": 1,
+      "attempts": [
+        {
+          "id": "subsland_9539",
+          "archiveBytes": 116870,
+          "cues": 430,
+          "cyrillic": 12745,
+          "success": true
+        }
+      ],
+      "success": true
+    }
+  ],
+  "success": true,
+  "homepageStatus": 200,
+  "source": {
+    "requests": 7,
+    "failures": 0,
+    "cooldownUntil": 0,
+    "consecutiveRefusals": 0,
+    "probing": false,
+    "epoch": 0,
+    "nextRequest": 1792949694848,
+    "available": true,
+    "retryAfter": 0
+  }
+}

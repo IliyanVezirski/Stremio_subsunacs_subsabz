@@ -7,6 +7,7 @@
     "node": ">=22.12.0 <25"
   },
   "scripts": {
+    "postinstall": "node scripts/install-subsland-client.js",
     "test": "node --test test/*.test.js",
     "test:live": "node scripts/live_check.js",
     "test:100": "node scripts/validate_100.js",

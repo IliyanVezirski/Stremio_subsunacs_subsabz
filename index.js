@@ -4,7 +4,7 @@ const express = require('express');
 const { AbuseGuard, normalizeIp } = require('./lib/abuse');
 const abuse = new AbuseGuard();
 const { BoundedCache } = require('./lib/cache');
-const { withDeadline, getSourceDiagnostics } = require('./lib/requests');
+const { withDeadline, getSourceDiagnostics, getSourceState, canRequestSource } = require('./lib/requests');
 const subsunacs = require('./providers/subsunacs');
 const subsSab = require('./providers/subssab');
 const subsland = require('./providers/subsland');
@@ -28,6 +28,8 @@ const proxyCache = new BoundedCache(200, 32 * 1024 * 1024);
 const pendingDownloads = Object.create(null);
 // Rate limiting — per-IP to block spammers before anything else
 const failedDownloads = new BoundedCache(500, 128 * 1024);
+const sourceHosts = { subsunacs: 'subsunacs.net', subssab: 'subs.sab.bz', subsland: 'subsland.com', subsource: 'api.subsource.net', easternspirit: 'easternspirit.org' };
+const subtitleCacheKey = (source, url, season, episode, fps, filename) => `${source}|${url}|${season || ''}|${episode || ''}|${fps || ''}|${filename || ''}`;
 
 // Release expired data even when no more requests arrive for those keys.
 const cleanupTimer = setInterval(() => {
@@ -64,7 +66,7 @@ function getProxyUrl(sub, season, episode, filename) {
 
 const manifest = {
     id: 'com.stremio.bulgarian.subs',
-    version: '1.2.0',
+    version: '1.2.1',
     name: 'Bulgarian Subtitles',
     description: 'Български субтитри от Subsunacs.net, Subs.sab.bz, SubsLand.com, SubSource.net и EasternSpirit.org.',
     
@@ -98,17 +100,23 @@ builder.defineSubtitlesHandler(async ({ type, id, extra = {} }) => {
         !(type === 'series' ? /^tt\d+:\d{1,3}:\d{1,4}$/ : /^tt\d+$/).test(id)) return { subtitles: [] };
     const [imdbId, season, episode] = id.split(':');
     const key = type + ':' + id;
-    const format = raw => ({ subtitles: raw.map((sub, i) => ({
+    const usable = raw => raw.filter(sub => {
+        const source = sub.id.split('_')[0];
+        return !sourceHosts[source] || canRequestSource(sourceHosts[source]) || proxyCache.get(subtitleCacheKey(source, sub.url, season, episode, sub.fps, extra.filename));
+    });
+    const format = raw => ({ cacheMaxAge: 30, subtitles: usable(raw).map((sub, i) => ({
         id: getProviderName(sub) + '_' + i, lang: 'bul',
         url: getProxyUrl(sub, season, episode, extra.filename), name: sub.name
     })) });
     const cached = cache.get(key);
-    if (cached) return format(cached);
+    if (cached && (!cached.length || usable(cached).length)) return format(cached);
     if (pendingSearches.has(key)) return format(await pendingSearches.get(key));
     if (pendingSearches.size >= 12) return { subtitles: [], cacheMaxAge: 0 };
 
     const task = (async () => {
         const search = async (name, provider, budget = SEARCH_TIMEOUT_MS) => {
+            const host = Object.entries({ subsunacs, subssab: subsSab, subsland, subsource, easternspirit: easternSpirit }).find(([, value]) => value === provider)?.[0];
+            if (host && !canRequestSource(sourceHosts[host])) return [];
             try { return await withDeadline(() => provider.search(imdbId, type, season, episode), budget); }
             catch (error) { console.error('[' + name + '] ' + error.message); return []; }
         };
@@ -166,9 +174,16 @@ function sendSubtitle(res, result) {
 }
 
 function downloadFailure(error) {
+    if (error.retryAfter > 0) return { status: 503, retryAt: error.retryAt || Date.now() + error.retryAfter * 1000, message: 'Subtitle source is temporarily unavailable. Please retry after the indicated delay or select another source.' };
     return error.code === 'SUBTITLE_FPS_REQUIRED'
         ? { status: 422, message: 'This MicroDVD subtitle needs FPS metadata. Select a time-based subtitle release.' }
         : { status: 502, message: 'Subtitle source unavailable. Try again later.' };
+}
+
+function sendFailure(res, failure) {
+    res.setHeader('Cache-Control', 'no-store');
+    if (failure.retryAt) res.setHeader('Retry-After', String(Math.max(1, Math.ceil((failure.retryAt - Date.now()) / 1000))));
+    return res.status(failure.status).send(failure.message);
 }
 
 app.get('/proxy', async (req, res) => {
@@ -196,7 +211,7 @@ app.get('/proxy', async (req, res) => {
     }
 
     // Build a unique cache key for this subtitle request
-    const cacheKey = `${source}|${url}|${season || ''}|${episode || ''}|${fps || ''}|${filename || ''}`;
+    const cacheKey = subtitleCacheKey(source, url, season, episode, fps, filename);
 
     // Serve from proxy cache if available
     const cachedSubtitle = proxyCache.get(cacheKey);
@@ -206,8 +221,6 @@ app.get('/proxy', async (req, res) => {
         res.setHeader('Cache-Control', 'public, max-age=86400');
         return sendSubtitle(res, cachedSubtitle);
     }
-
-    console.log(`[Proxy] Source: ${source}, URL: ${url}${season ? `, S${season}E${episode}` : ''}`);
 
     // Request coalescing — if a download is already in-flight for this key, wait for it
     if (pendingDownloads[cacheKey]) {
@@ -224,7 +237,7 @@ app.get('/proxy', async (req, res) => {
         } catch (error) {
             console.error('[Proxy] Coalesced request error:', error.message);
             const failure = downloadFailure(error);
-            return res.status(failure.status).send(failure.message);
+            return sendFailure(res, failure);
         }
     }
 
@@ -233,9 +246,12 @@ app.get('/proxy', async (req, res) => {
         return res.status(503).send('Downloads busy. Try again shortly.');
     }
 
+    const sourceState = getSourceState(sourceHosts[source]);
+    if (!sourceState.available) return sendFailure(res, downloadFailure({ retryAfter: sourceState.retryAfter, retryAt: Math.max(sourceState.cooldownUntil, Date.now() + sourceState.retryAfter * 1000) }));
     const previousFailure = failedDownloads.get(cacheKey);
-    if (previousFailure) return res.status(previousFailure.status).send(previousFailure.message);
+    if (previousFailure) return sendFailure(res, previousFailure);
     if (!enforce(req, res, 'downloads', 10)) return;
+    console.log(`[Proxy] Source: ${source}, URL: ${url}${season ? `, S${season}E${episode}` : ''}`);
 
     // Start a new download and register it for coalescing
     const downloadPromise = (async () => {
@@ -291,8 +307,9 @@ app.get('/proxy', async (req, res) => {
     } catch (error) {
         console.error('[Proxy] Error:', error.message);
         const failure = downloadFailure(error);
-        failedDownloads.set(cacheKey, failure, 30000);
-        return res.status(failure.status).send(failure.message);
+        // Source cooldown is tracked centrally; do not add a second stale failure-cache delay.
+        if (!failure.retryAt) failedDownloads.set(cacheKey, failure, 30000);
+        return sendFailure(res, failure);
     } finally {
         delete pendingDownloads[cacheKey];
     }

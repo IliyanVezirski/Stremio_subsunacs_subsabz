@@ -2,6 +2,7 @@ const { normalizeTitle, queryVariants, rowMetadata, movieMatch, yearsMatch } = r
 const { getMetadata } = require('../lib/metadata');
 const { matchesEpisode, matchesSeasonPack, matchIdentifiedSeries } = require('../lib/episodes');
 const { releaseMetadata } = require('../lib/releases');
+const { canRequestSource } = require('../lib/requests');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const iconv = require('iconv-lite');
@@ -160,6 +161,8 @@ async function searchQuery(imdbId, type, season, episode, query) {
                     : isGoodMatch(name, meta.name, year);
                 // The site's tooltip poster filename is the numeric IMDb ID (sometimes zero-padded).
                 const posterId = ($link.attr('title') || '').match(/ii\/big(?:200)?\/(\d+)\.(?:jpg|png)/i)?.[1];
+                // Same-title remakes are different series: a known conflicting IMDb ID is a rejection.
+                if (Number(posterId) > 0 && Number(posterId) !== Number(imdbId.slice(2))) return;
                 if (posterId && Number(posterId) === Number(imdbId.slice(2))) matchResult = isSeries ? matchIdentifiedSeries(name, season, episode) : { match: true, score: 20 };
                 if (!isSeries && !matchResult.match && subtitleYear) {
                     const aliases = $link.siblings('span.smGray').map((_, el) => $(el).text().trim()).get();
@@ -249,11 +252,13 @@ async function searchQuery(imdbId, type, season, episode, query) {
 }
 
 async function search(imdbId, type, season, episode) {
+    if (!canRequestSource(BASE_URL)) return [];
     const meta = await getMetadata(imdbId, type);
     if (!meta) return [];
     const titles = queryVariants(meta.name);
     const queries = type === 'series' ? [`${titles[0]} ${String(season).padStart(2, '0')}`, ...titles] : titles;
     for (const query of [...new Set(queries)]) {
+        if (!canRequestSource(BASE_URL)) break;
         const result = await searchQuery(imdbId, type, season, episode, query);
         if (result.length) return result;
     }

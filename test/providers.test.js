@@ -42,6 +42,7 @@ test('Subs.sab.bz stops empty pagination and falls back from IMDb to the title',
 });
 
 test('SubsLand searches and downloads directly, with Windows-1251 HTML', async t => {
+    t.mock.method(subsland.client, 'get', (...args) => axios.get(...args));
     const visited = [];
     t.mock.method(axios, 'get', async url => {
         visited.push(url);
@@ -59,6 +60,7 @@ test('SubsLand searches and downloads directly, with Windows-1251 HTML', async t
 });
 
 test('SubsLand follows HTML-escaped pagination to older seasons and rejects comment-page links', async t => {
+    t.mock.method(subsland.client, 'get', (...args) => axios.get(...args));
     const pages = [];
     t.mock.method(axios, 'get', async url => {
         if (url.includes('cinemeta')) return { data: { meta: { name: 'Silo', year: '2023' } } };
@@ -83,6 +85,7 @@ test('IMDb identity accepts translated series names but still requires the reque
 });
 
 test('Grimm must not return The Sisters Grimm', async t => {
+    t.mock.method(subsland.client, 'get', (...args) => axios.get(...args));
     t.mock.method(axios, 'get', async url => {
         if (url.includes('imdb.com')) throw new Error('No IMDb in fixture');
         if (url.includes('cinemeta')) return { data: { meta: { name: 'Grimm', year: '2011' } } };
@@ -106,6 +109,12 @@ test('Subsunacs searches accented colon titles using a short fallback and verifi
     const results = await require('../providers/subsunacs').search('tt0110413', 'movie');
     assert.deepEqual(visited, ['Leon The Professional', 'Leon']);
     assert.equal(results[0].id, 'subsunacs_123');
+});
+
+test('Subsunacs rejects Dark Matter 2015 when the requested series is Dark Matter 2024', async t => {
+    t.mock.method(axios, 'get', async () => ({ data: { meta: { name: 'Dark Matter', year: '2024' } } }));
+    t.mock.method(axios, 'post', async () => ({ data: iconv.encode('<table><tr><td><a class="tooltip" href="/subtitles/Dark_Matter_02x07-115596/" title="&lt;img src=&quot;/ii/big/4159076.jpg&quot;&gt;">Dark Matter - 02x07</a><span class="smGray">(2015)</span></td></tr></table>', 'win1251') }));
+    assert.deepEqual(await require('../providers/subsunacs').search('tt19231492', 'series', 2, 7), []);
 });
 
 test('Subs.sab.bz client keeps session cookies for subsequent downloads', async t => {

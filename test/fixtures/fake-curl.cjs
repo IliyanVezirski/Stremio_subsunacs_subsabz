@@ -1,0 +1,13 @@
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const url = new URL(args[args.indexOf('--url') + 1]);
+const headerFile = args[args.indexOf('--dump-header') + 1];
+let headers = 'HTTP/2 200\r\ncontent-type: text/plain\r\n';
+if (url.pathname === '/cookie') headers += 'set-cookie: session=fixture; Path=/; Secure; HttpOnly\r\n';
+if (url.pathname === '/external') headers = 'HTTP/2 302\r\nlocation: http://127.0.0.1/private\r\n';
+if (url.pathname === '/redirect') headers = 'HTTP/2 302\r\nlocation: /final\r\n';
+if (url.pathname === '/refused') headers = 'HTTP/2 403\r\ncf-mitigated: challenge\r\nretry-after: 120\r\n';
+fs.writeFileSync(headerFile, headers + '\r\n');
+if (url.pathname === '/slow') setTimeout(() => process.stdout.write('finished'), 3000);
+else if (url.pathname === '/large') process.stdout.write(Buffer.alloc(4096, 97));
+else process.stdout.write(JSON.stringify({ path: url.pathname, cookie: args.find(x => x.startsWith('Cookie: ')) || '', disabledConfig: args[0] === '--disable', globoff: args.includes('--globoff') }));

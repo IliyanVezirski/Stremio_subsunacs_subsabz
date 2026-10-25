@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-10-25T17:25:02Z",
+  "environment": "render",
+  "method": "Bounded startup diagnostic using axios-cookiejar-support, shared CookieJar and Referer; original npm start restored after diagnosis",
+  "url": "https://subsland.com/",
+  "status": 403,
+  "server": "cloudflare",
+  "mitigated": "challenge",
+  "ray": "a502eb1418d90c31-PDX",
+  "title": "Just a moment...",
+  "bytes": 5562,
+  "cookieCount": 0,
+  "success": false,
+  "conclusion": "Cloudflare challenges the Render request before the search parser runs. Cookie persistence alone did not restore access."
+}

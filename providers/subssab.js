@@ -6,7 +6,7 @@ const cheerio = require('cheerio');
 const iconv = require('iconv-lite');
 const { wrapper } = require('axios-cookiejar-support');
 const { CookieJar } = require('tough-cookie');
-const { attachRequestLimits } = require('../lib/requests');
+const { attachRequestLimits, canRequestSource } = require('../lib/requests');
 const { fuzzyMatch } = require('./fuzzy');
 const { getImdbMetadata } = require('./subsunacs');
 
@@ -228,11 +228,13 @@ async function searchQuery(imdbId, type, season, episode, query, byImdb = false)
 }
 
 async function search(imdbId, type, season, episode) {
+    if (!canRequestSource(BASE_URL)) return [];
     let results = await searchQuery(imdbId, type, season, episode, null, true);
     if (results.length) return results;
     const meta = await getMetadata(imdbId, type);
     if (!meta) return [];
     for (const query of queryVariants(meta.name)) {
+        if (!canRequestSource(BASE_URL)) break;
         results = await searchQuery(imdbId, type, season, episode, query);
         if (results.length) return results;
     }

@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-10-25T17:30:38Z",
+  "environment": "render",
+  "client": "curl-impersonate 2.3.1",
+  "profile": "chrome131",
+  "binaryArchiveSha256": "0d8551cc1620be3c40c6f42d0b46c7077e0fe2a1a28a69d659e49e4f412cd0a0",
+  "method": "Bounded diagnostic on the actual Render instance: sequential homepage, Matrix search and original archive; stops on any non-200 response",
+  "archive": {
+    "url": "https://subsland.com/downloadsubtitles/Matrix(subsland.com).rar",
+    "status": 200,
+    "bytes": 17164,
+    "magic": "526172211a0700cf",
+    "extractedCharacters": 43859,
+    "cyrillic": 14512
+  },
+  "success": true,
+  "scope": "Verified transport and archive extraction on Render; complete provider deployment is verified separately after the 100-title run."
+}

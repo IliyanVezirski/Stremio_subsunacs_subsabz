@@ -1,0 +1,8 @@
+{
+  "checkedOn": "2026-10-25",
+  "source": "Render application logs for the historical instance d9pht, time range 2026-10-24 21:58:26–22:59:26 UTC",
+  "displayedTimestamp": "Oct 25, 01:48:42 AM (Render dashboard display)",
+  "fatalMessage": "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory",
+  "stackEvidence": "v8::internal::V8::FatalProcessOutOfMemory",
+  "conclusion": "A historical JavaScript heap exhaustion is confirmed. The log alone does not identify the individual allocation or establish that every exit 134 has the same cause."
+}
